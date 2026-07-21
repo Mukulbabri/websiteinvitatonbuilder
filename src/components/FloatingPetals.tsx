@@ -55,7 +55,7 @@ export function FloatingPetals({ count = 12 }: { count?: number }) {
   );
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-10 overflow-hidden">
+    <div className="pointer-events-none fixed inset-0 z-40 overflow-hidden">
       {petals.map((p) =>
         p.emoji === "🦋" ? (
           <span

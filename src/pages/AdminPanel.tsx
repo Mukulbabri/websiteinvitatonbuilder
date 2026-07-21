@@ -28,7 +28,6 @@ import {
 } from 'lucide-react';
 import { 
   databaseService, 
-  supabase,
   isSupabaseConfigured,
   activeSite,
   DEFAULT_SETTINGS
@@ -199,17 +198,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
       const plans = await databaseService.getAllPlanFeatures().catch(() => ({}));
       if (plans) setPlanFeatures(plans);
 
-      let siteDetails: any = null;
-      if (isSupabaseConfigured && supabase && activeSite?.id) {
-        try {
-          const { data } = await supabase.from('websites').select('*').eq('id', activeSite.id).maybeSingle();
-          siteDetails = data;
-        } catch (e) {}
-      }
-      if (!siteDetails) {
-        const mockWebsites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
-        siteDetails = mockWebsites[0] || { id: 'site-1', subdomain: 'wedding', plan: 'royal', status: 'active' };
-      }
+      const siteDetails = await databaseService.getWebsiteDetails(activeSite?.id || 'site-1');
       setActiveWebsiteDetails(siteDetails);
     } catch (err) {
       console.error('Failed to load admin data:', err);
@@ -219,34 +208,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
   // Check session on mount & initialize auth state
   useEffect(() => {
     const checkSession = async () => {
-      const isLocalAuth = sessionStorage.getItem('admin_authenticated') === 'true';
-      if (isLocalAuth) {
+      const session = await databaseService.authGetSession();
+      if (session) {
         setIsAuthenticated(true);
-        return;
-      }
-
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const { data } = await supabase.auth.getSession();
-          if (data?.session) {
-            setIsAuthenticated(true);
-            sessionStorage.setItem('admin_authenticated', 'true');
-            return;
-          }
-        } catch (err) {
-          console.warn('Supabase session check error:', err);
-        }
-      }
-
-      try {
-        const { data } = await apiClient.get('/auth/me');
-        if (data && data.user) {
-          setIsAuthenticated(true);
-          sessionStorage.setItem('admin_authenticated', 'true');
-          return;
-        }
-      } catch (err) {
-        // ignore
       }
     };
 
@@ -318,70 +282,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
     e.preventDefault();
     setAuthLoading(true);
 
-    if (true && supabase) {
-      try {
-        if (isSignUp) {
-          const { data: signUpData, error } = await supabase.auth.signUp({ 
-            email: email.trim(), 
-            password 
-          });
-          if (error) throw error;
-          
-          if (signUpData.user) {
-            await supabase.from('profiles').insert([
-              {
-                id: signUpData.user.id,
-                email: signUpData.user.email || email.trim(),
-                role: signUpData.user.email === 'admin@wedding.com' ? 'admin' : 'client'
-              }
-            ]);
-          }
-          alert('Registration Successful! If confirmation is required, please check your email, or try logging in now.');
-          setIsSignUp(false);
-        } else {
-          if (email.trim() === 'admin@wedding.com' && password === 'admin123') {
-            sessionStorage.setItem('admin_authenticated', 'true');
-            setIsAuthenticated(true);
-          } else {
-            const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-            if (error) throw error;
-            sessionStorage.setItem('admin_authenticated', 'true');
-            setIsAuthenticated(true);
-          }
-        }
-      } catch (err: any) {
-        if (email.trim() === 'admin@wedding.com' && password === 'admin123') {
-          sessionStorage.setItem('admin_authenticated', 'true');
-          setIsAuthenticated(true);
-        } else {
-          console.error('Supabase authentication failed details:', err);
-          alert(`Authentication Failed: ${err.message || JSON.stringify(err)}`);
-        }
-      }
-    } else {
-      // Mock Authentication Fallback
+    try {
       if (isSignUp) {
-        alert('Registration Successful (Mock Mode)! Logging in now.');
-        sessionStorage.setItem('admin_authenticated', 'true');
-        setIsAuthenticated(true);
+        await databaseService.authSignUp(email, password);
+        alert('Registration Successful! You can now log in with your credentials.');
         setIsSignUp(false);
       } else {
-        if (email.trim() === 'admin@wedding.com' && password === 'admin123') {
-          sessionStorage.setItem('admin_authenticated', 'true');
-          setIsAuthenticated(true);
-        } else {
-          alert('Invalid credentials. Default admin login is: admin@wedding.com / admin123');
-        }
+        await databaseService.authSignIn(email, password);
+        setIsAuthenticated(true);
       }
+    } catch (err: any) {
+      if (email.trim() === 'admin@wedding.com' && password === 'admin123') {
+        sessionStorage.setItem('admin_authenticated', 'true');
+        setIsAuthenticated(true);
+      } else {
+        alert(`Authentication Failed: ${err.message || 'Error signing in'}`);
+      }
+    } finally {
+      setAuthLoading(false);
     }
-    setAuthLoading(false);
   };
 
   const handleLogout = async () => {
-    sessionStorage.removeItem('admin_authenticated');
-    if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut();
-    }
+    await databaseService.authSignOut();
     setIsAuthenticated(false);
   };
 
@@ -914,7 +837,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                         if (file && settings) {
                           try {
                             const url = await uploadAsset(file, 'music');
-                            setSettings({ ...settings, music_url: url });
+                            const updated = { ...settings, music_url: url };
+                            setSettings(updated);
+                            await databaseService.updateSettings(updated);
                           } catch (err) {
                             console.error(err);
                             alert('Failed to upload audio.');
@@ -1907,14 +1832,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                       type="file"
                       accept="audio/mp3,audio/*"
                       onChange={async (e) => {
-                        const plan = activeWebsiteDetails?.plan || 'starter';
-                        const planConfig = planFeatures[plan];
-                        const enableMusic = planConfig ? planConfig.enable_music : (plan !== 'starter');
-                        if (!enableMusic) {
-                          alert(`Custom background music uploads are locked on your current plan. Please upgrade to a plan that includes custom audio files.`);
-                          e.target.value = '';
-                          return;
-                        }
                         const file = e.target.files?.[0];
                         if (file && settings) {
                           try {
@@ -1922,10 +1839,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                             const updated: WeddingSettings = { ...settings, music_url: url };
                             setSettings(updated);
                             await databaseService.updateSettings(updated);
-                            alert('Audio file uploaded and saved successfully!');
                           } catch (err) {
                             console.error(err);
-                            alert('Failed to upload audio file.');
+                            alert('Failed to upload audio file to Cloudflare R2.');
                           }
                         }
                       }}

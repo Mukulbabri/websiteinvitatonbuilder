@@ -12,9 +12,7 @@ import {
 } from 'lucide-react';
 import { 
   databaseService,
-  activeSite,
-  isSupabaseConfigured,
-  supabase
+  activeSite
 } from '../services/database';
 import type { 
   WeddingSettings, 
@@ -59,15 +57,7 @@ export const WeddingPage = ({
     const fetchPlan = async () => {
       try {
         if (!activeSite) return;
-        let planValue = 'starter';
-        if (isSupabaseConfigured && supabase) {
-          const { data } = await supabase.from('websites').select('plan').eq('id', activeSite.id).maybeSingle();
-          if (data?.plan) planValue = data.plan;
-        } else {
-          const mockWebsites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
-          const s = mockWebsites.find((w: any) => w.id === activeSite.id);
-          if (s?.plan) planValue = s.plan;
-        }
+        const planValue = await databaseService.getWebsitePlan(activeSite.id);
         setSitePlan(planValue as any);
         
         // Load plan features configuration
@@ -534,27 +524,27 @@ export const WeddingPage = ({
       </section>
 
       {/* 6.5 TRADITIONAL RSVP, COMPLIMENTS & VENUE MAP */}
-      <section id="venue-map" className="pt-4 pb-20 bg-[#FAEDCD]/10 px-6 border-t border-primary/10">
-        <div className="max-w-5xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-12 items-stretch">
+      <section id="venue-map" className="py-12 md:py-20 bg-[#FAEDCD]/10 px-4 sm:px-6 border-t border-primary/10 w-full overflow-hidden">
+        <div className="max-w-5xl mx-auto w-full flex flex-col items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-stretch w-full max-w-lg md:max-w-none mx-auto justify-center">
             {/* Left Column: RSVP & Compliments card */}
             <motion.div 
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="glass-card bg-[#FAF6EA]/80 border border-[#D4AF37]/35 rounded-[28px] p-8 md:p-12 flex flex-col justify-center text-center shadow-xl relative overflow-hidden"
+              className="glass-card bg-[#FAF6EA]/90 border border-[#D4AF37]/40 rounded-[24px] md:rounded-[28px] p-6 sm:p-8 md:p-12 flex flex-col justify-center text-center shadow-xl relative overflow-hidden w-full mx-auto"
             >
               {/* Decorative corner decorations */}
               <div className="absolute -top-10 -left-10 w-24 h-24 bg-[url('/traditional-card-corner.png')] bg-no-repeat bg-contain opacity-5 pointer-events-none" />
               <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-[url('/traditional-card-corner.png')] bg-no-repeat bg-contain rotate-180 opacity-5 pointer-events-none" />
 
               {/* RSVP Block */}
-              <div className="mb-10">
-                <span className="font-poppins text-[10px] uppercase tracking-[0.2em] text-primary/70 font-bold block mb-1">R S V P</span>
+              <div className="mb-8 md:mb-10 w-full text-center">
+                <span className="font-poppins text-[10px] sm:text-xs uppercase tracking-[0.2em] text-primary/70 font-bold block mb-1">R S V P</span>
                 <h3 
                   style={{ fontFamily: "'Cinzel', 'Playfair Display', serif" }}
-                  className="text-2xl md:text-3xl font-bold text-[#B27F4C] tracking-wide mb-3"
+                  className="text-xl sm:text-2xl md:text-3xl font-bold text-[#B27F4C] tracking-wide mb-3"
                 >
                   {settings.rsvp_family || 'Sharma Family'}
                 </h3>
@@ -562,16 +552,16 @@ export const WeddingPage = ({
               </div>
 
               {/* Compliments Block */}
-              <div>
+              <div className="w-full text-center">
                 <span 
                   style={{ fontFamily: "'Great Vibes', 'Candlescript', cursive" }}
-                  className="text-2xl text-[#B27F4C] block mb-2"
+                  className="text-xl sm:text-2xl text-[#B27F4C] block mb-2"
                 >
                   With Best Compliments
                 </span>
                 <p 
                   style={{ fontFamily: "'Cinzel', 'Playfair Display', serif" }}
-                  className="text-sm md:text-base font-semibold text-[#5c3a21] tracking-wide leading-relaxed"
+                  className="text-xs sm:text-sm md:text-base font-semibold text-[#5c3a21] tracking-wide leading-relaxed"
                 >
                   {settings.compliments_text || 'All Relatives & Friends'}
                 </p>
@@ -580,14 +570,14 @@ export const WeddingPage = ({
 
             {/* Right Column: Google Map and navigation button */}
             <motion.div 
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.8 }}
-              className="flex flex-col gap-6"
+              className="flex flex-col gap-5 sm:gap-6 w-full mx-auto items-center justify-center"
             >
               {/* Google Map Iframe Container */}
-              <div className="w-full aspect-[4/3] md:aspect-auto md:h-full min-h-[280px] rounded-[24px] overflow-hidden shadow-xl border border-primary/20 relative">
+              <div className="w-full aspect-[4/3] sm:aspect-square md:aspect-auto md:h-full min-h-[250px] sm:min-h-[300px] rounded-[20px] md:rounded-[24px] overflow-hidden shadow-xl border border-primary/20 relative">
                 <iframe
                   title="Venue Map Location"
                   width="100%"
@@ -604,10 +594,10 @@ export const WeddingPage = ({
                 href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(events.length > 0 ? events[events.length - 2]?.venue || events[0]?.venue : 'Grand Palace Resort')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="btn-gold py-4 text-xs font-poppins uppercase tracking-widest font-semibold flex items-center justify-center gap-2 shadow-lg"
+                className="btn-gold w-full py-3.5 sm:py-4 px-4 text-[11px] sm:text-xs font-poppins uppercase tracking-widest font-semibold flex items-center justify-center gap-2 shadow-lg text-center"
               >
-                <MapPin size={14} className="text-white" />
-                Navigate to Venue (Google Maps)
+                <MapPin size={15} className="text-white shrink-0" />
+                <span>Navigate to Venue (Google Maps)</span>
               </a>
             </motion.div>
           </div>

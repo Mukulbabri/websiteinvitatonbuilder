@@ -136,7 +136,7 @@ export default function App() {
       <MusicPlayer
         musicUrl={settings.music_url || ''}
         autoPlay={startMusic}
-        enabled={settings.enable_music !== false}
+        enabled={!isAdminPath && settings.enable_music !== false}
         showUI={!isAdminPath}
       />
 
