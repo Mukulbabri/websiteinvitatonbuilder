@@ -248,6 +248,8 @@ export interface WeddingSettings {
 
   rsvp_family?: string;
   compliments_text?: string;
+  rsvp_font?: string;
+  compliments_font?: string;
   whatsapp_number?: string;
 
   haldi_bg?: string;
@@ -256,6 +258,14 @@ export interface WeddingSettings {
   wedding_bg?: string;
   reception_bg?: string;
   custom_events?: CustomEventCard[];
+
+  // Welcome Gate Button Customization
+  gate_btn_text?: string;
+  gate_btn_subtitle?: string;
+  gate_btn_shape?: 'circle' | 'pill' | 'square';
+  gate_btn_bg_opacity?: number;
+  gate_btn_border_color?: string;
+  gate_btn_anim_style?: 'pulse' | 'breath' | 'radar' | 'none';
 }
 
 export interface CustomEventCard {
@@ -286,6 +296,8 @@ export interface GalleryItem {
   id: string;
   site_id?: string;
   image_url: string;
+  url?: string;
+  imageUrl?: string;
   sort_order: number;
   created_at?: string;
 }
@@ -428,6 +440,8 @@ export const DEFAULT_SETTINGS: WeddingSettings = {
 
   rsvp_family: 'Sharma Family',
   compliments_text: 'All Relatives & Friends',
+  rsvp_font: "'Candlescript Demo Version', 'Candlescript', cursive",
+  compliments_font: "'Candlescript Demo Version', 'Candlescript', cursive",
   whatsapp_number: '+919876543210',
 
   haldi_bg: '/Haldi-bg.png',
@@ -435,7 +449,14 @@ export const DEFAULT_SETTINGS: WeddingSettings = {
   sangeet_bg: '/Sangeet-bg.png',
   wedding_bg: '/Wedding-bg.png',
   reception_bg: '/Reception-bg.png',
-  custom_events: []
+  custom_events: [],
+
+  gate_btn_text: 'Tap to Open',
+  gate_btn_subtitle: '✦ Celebrate ✦',
+  gate_btn_shape: 'circle',
+  gate_btn_bg_opacity: 0.5,
+  gate_btn_border_color: '#D4AF37',
+  gate_btn_anim_style: 'pulse'
 };
 
 const DEFAULT_EVENTS: WeddingEvent[] = [
@@ -648,22 +669,24 @@ export const databaseService = {
   async getSettings(): Promise<any> {
     const siteId = activeSiteId || 'site-1';
     const storageKey = `wedding_settings_${siteId}`;
-    const raw = localStorage.getItem(storageKey) || localStorage.getItem('wedding_settings');
-    const localSettings = raw ? JSON.parse(raw) : {};
 
     try {
       const data = await settingsService.getSettings(siteId);
-      if (data) {
-        const merged = { ...DEFAULT_SETTINGS, ...data, ...localSettings };
-        if (data.music_url) merged.music_url = data.music_url;
+      if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+        // Cloud Database is primary source of truth!
+        const merged = { ...DEFAULT_SETTINGS, ...data };
         applyThemeSettings(merged);
         localStorage.setItem(storageKey, JSON.stringify(merged));
         localStorage.setItem('wedding_settings', JSON.stringify(merged));
         return merged;
       }
     } catch (err) {
-      // ignore backend failure
+      console.warn('Backend API getSettings notice:', err);
     }
+
+    // Fallback only if Cloud API is unreachable
+    const raw = localStorage.getItem(storageKey) || localStorage.getItem('wedding_settings');
+    const localSettings = raw ? JSON.parse(raw) : {};
     const merged = { ...DEFAULT_SETTINGS, ...localSettings };
     applyThemeSettings(merged);
     return merged;
@@ -791,15 +814,39 @@ export const databaseService = {
   // 3. Gallery CRUD
   async getGallery(): Promise<any[]> {
     const siteId = activeSiteId || 'site-1';
+    const storageKey = `wedding_gallery_${siteId}`;
+    let apiData: any[] = [];
     try {
       const data = await galleryService.getGallery(siteId);
-      if (data && data.length > 0) return data;
+      if (data && Array.isArray(data)) {
+        apiData = data;
+      }
     } catch (err) {
       // ignore
     }
-    const storageKey = `wedding_gallery_${siteId}`;
-    const raw = localStorage.getItem(storageKey) || localStorage.getItem('wedding_gallery');
-    return raw ? JSON.parse(raw) : DEFAULT_GALLERY;
+
+    const localRaw = localStorage.getItem(storageKey) || localStorage.getItem('wedding_gallery');
+    const localItems = localRaw ? JSON.parse(localRaw) : DEFAULT_GALLERY;
+
+    const mergedMap = new Map();
+    [...localItems, ...apiData].forEach((item: any) => {
+      const url = item.image_url || item.url || item.imageUrl;
+      if (url) {
+        const id = item.id || `gal-${url.slice(-10)}`;
+        mergedMap.set(id, {
+          ...item,
+          id,
+          image_url: url,
+          url: url,
+          imageUrl: url
+        });
+      }
+    });
+
+    const finalGallery = Array.from(mergedMap.values());
+    localStorage.setItem(storageKey, JSON.stringify(finalGallery));
+    localStorage.setItem('wedding_gallery', JSON.stringify(finalGallery));
+    return finalGallery;
   },
 
   async addGalleryImage(imageUrl: string): Promise<any> {
@@ -807,14 +854,24 @@ export const databaseService = {
     const storageKey = `wedding_gallery_${siteId}`;
     const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_gallery') || '[]');
     let newItem: any = {
-      id: `gal-${Date.now()}`,
+      id: `gal-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       image_url: imageUrl,
+      url: imageUrl,
+      imageUrl: imageUrl,
       sort_order: list.length + 1
     };
 
     try {
       const data = await galleryService.addImage(siteId, imageUrl);
-      if (data) newItem = data;
+      if (data) {
+        newItem = {
+          ...newItem,
+          ...data,
+          image_url: data.image_url || data.url || data.imageUrl || imageUrl,
+          url: data.url || data.image_url || imageUrl,
+          imageUrl: data.imageUrl || data.image_url || imageUrl
+        };
+      }
     } catch (err) {
       // ignore
     }

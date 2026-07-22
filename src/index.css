@@ -1,16 +1,26 @@
+@import url('https://fonts.cdnfonts.com/css/candlescript-demo-version');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Great+Vibes&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Waterfall&display=swap');
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Great+Vibes&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
-
 
 @font-face {
   font-family: 'Candlescript';
-  src: url('/fonts/Candlescript.woff2') format('woff2'),
-       url('/fonts/Candlescript.woff') format('woff'),
-       url('/fonts/Candlescript.ttf') format('truetype');
+  src: local('Candlescript Demo Version'), local('Candlescript'), local('Great Vibes'), url('https://fonts.gstatic.com/s/greatvibes/v18/RWmMoKWR9v4ksMfaWd_JN9XBIA.woff2') format('woff2');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
 }
+
+.font-candlescript {
+  font-family: 'Candlescript Demo Version', 'Candlescript', 'Great Vibes', cursive;
+}
+
+.waterfall-regular {
+  font-family: "Waterfall", cursive;
+  font-weight: 400;
+  font-style: normal;
+}
+
+
 
 :root {
   --theme-primary: #D4A373;

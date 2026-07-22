@@ -2,9 +2,41 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/db';
 import { sendResponse } from '../utils/response.util';
 
+const ensureDefaultSite = async (siteId: string) => {
+  try {
+    const existingSite = await prisma.website.findUnique({ where: { id: siteId } });
+    if (!existingSite) {
+      let defaultUser = await prisma.user.findFirst();
+      if (!defaultUser) {
+        defaultUser = await prisma.user.create({
+          data: {
+            email: 'admin@wedding.com',
+            passwordHash: 'hashed_admin_password_123',
+            name: 'Admin',
+            role: 'ADMIN',
+          },
+        });
+      }
+      await prisma.website.create({
+        data: {
+          id: siteId,
+          ownerId: defaultUser.id,
+          subdomain: 'wedding',
+          domain: 'wedding.com',
+          status: 'ACTIVE',
+          plan: 'ROYAL',
+        },
+      });
+    }
+  } catch (err) {
+    console.warn('ensureDefaultSite notice:', err);
+  }
+};
+
 export const getSettings = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const siteId = (req.params.siteId || req.query.siteId || 'site-1') as string;
+    await ensureDefaultSite(siteId);
 
     let settings = null;
     try {
@@ -12,15 +44,21 @@ export const getSettings = async (req: Request, res: Response, next: NextFunctio
         where: { siteId },
       });
       if (record) {
-        settings = (record as any).data 
-          ? { ...(record as any).data, id: record.id, siteId: record.siteId } 
-          : record;
+        let parsedData = {};
+        if (record.data) {
+          try {
+            parsedData = typeof record.data === 'string' ? JSON.parse(record.data) : record.data;
+          } catch (e) {
+            parsedData = {};
+          }
+        }
+        settings = { ...record, ...parsedData, id: record.id, siteId: record.siteId };
       }
     } catch (dbErr: any) {
       console.warn('Prisma DB getSettings error:', dbErr?.message || dbErr);
     }
 
-    return sendResponse(res, 200, true, 'Settings retrieved from PostgreSQL Database', settings);
+    return sendResponse(res, 200, true, 'Settings retrieved from Cloud Database', settings);
   } catch (error) {
     next(error);
   }
@@ -29,6 +67,8 @@ export const getSettings = async (req: Request, res: Response, next: NextFunctio
 export const updateSettings = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const siteId = (req.params.siteId || 'site-1') as string;
+    await ensureDefaultSite(siteId);
+
     const data = { ...req.body };
 
     delete data.id;
@@ -36,7 +76,7 @@ export const updateSettings = async (req: Request, res: Response, next: NextFunc
 
     let settings = data;
 
-    // Strictly save to PostgreSQL DB via Prisma ORM
+    // Save to Cloud Database via Prisma ORM
     try {
       const updatedRecord = await prisma.weddingSettings.upsert({
         where: { siteId },
@@ -59,14 +99,12 @@ export const updateSettings = async (req: Request, res: Response, next: NextFunc
         },
       });
 
-      settings = (updatedRecord as any).data 
-        ? { ...data, ...(updatedRecord as any).data, id: updatedRecord.id, siteId } 
-        : { ...data, id: updatedRecord.id, siteId };
+      settings = { ...data, id: updatedRecord.id, siteId };
     } catch (dbErr: any) {
       console.error('Prisma DB updateSettings error:', dbErr?.message || dbErr);
     }
 
-    return sendResponse(res, 200, true, 'All Admin Settings saved strictly to PostgreSQL Database', settings);
+    return sendResponse(res, 200, true, 'All Admin Settings saved strictly to Cloud Database', settings);
   } catch (error) {
     next(error);
   }

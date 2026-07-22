@@ -44,6 +44,10 @@ export default function App() {
     setStartMusic(playMusic);
   }, []);
 
+  const handleStartPlayGate = useCallback(() => {
+    setStartMusic(true);
+  }, []);
+
   const handleNavigateToAdmin = useCallback(() => {
     navigate('/admin');
   }, [navigate]);
@@ -57,25 +61,23 @@ export default function App() {
         styleEl.id = 'custom-uploaded-font-style';
         document.head.appendChild(styleEl);
       }
-      let formatStr = 'truetype';
-      const fontName = settings.custom_font_name?.toLowerCase() || '';
-      if (fontName.endsWith('.woff2')) {
-        formatStr = 'woff2';
-      } else if (fontName.endsWith('.woff')) {
-        formatStr = 'woff';
-      } else if (fontName.endsWith('.otf')) {
-        formatStr = 'opentype';
-      }
 
       styleEl.innerHTML = `
         @font-face {
           font-family: 'CustomUploadedFont';
-          src: url('${settings.custom_font_base64}') format('${formatStr}');
+          src: url('${settings.custom_font_base64}');
           font-weight: normal;
           font-style: normal;
           font-display: swap;
         }
       `;
+
+      try {
+        const fontFace = new FontFace('CustomUploadedFont', `url(${settings.custom_font_base64})`);
+        fontFace.load().then((loadedFace) => {
+          (document.fonts as any).add(loadedFace);
+        }).catch(() => {});
+      } catch (err) {}
     } else {
       const styleEl = document.getElementById('custom-uploaded-font-style');
       if (styleEl) styleEl.remove();
@@ -140,9 +142,9 @@ export default function App() {
         showUI={!isAdminPath}
       />
 
-      {/* Floating Petals */}
+      {/* Floating Petals & Animated Butterflies */}
       {settings.enable_leaves && isGateOpened && !isAdminPath && (
-        <FloatingPetals count={12} />
+        <FloatingPetals count={20} />
       )}
 
       {/* Custom Cursor */}
@@ -161,6 +163,7 @@ export default function App() {
         <WeddingPage
           settings={settings}
           onNavigateToAdmin={handleNavigateToAdmin}
+          isGateOpened={isGateOpened}
         />
       )}
 
@@ -169,6 +172,7 @@ export default function App() {
         {!isGateOpened && !isAdminPath && (
           <WelcomeGate
             gateVideoUrl={settings.gate_video_url ?? ''}
+            settings={settings}
             onOpen={handleOpenGate}
             onStartPlay={() => setStartMusic(true)}
           />

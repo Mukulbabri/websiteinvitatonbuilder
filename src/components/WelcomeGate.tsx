@@ -1,21 +1,32 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import type { WeddingSettings } from '../services/database';
 
 interface WelcomeGateProps {
   gateVideoUrl: string;
+  settings?: WeddingSettings;
   onOpen: (startMusic: boolean) => void;
   onStartPlay?: () => void;
 }
 
 export const WelcomeGate: React.FC<WelcomeGateProps> = ({
   gateVideoUrl,
+  settings,
   onOpen,
   onStartPlay,
 }) => {
   const [isOpening, setIsOpening] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const particleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const btnText = settings?.gate_btn_text || 'Tap to Open';
+  const btnSubtitle = settings?.gate_btn_subtitle !== undefined ? settings.gate_btn_subtitle : '✦ Celebrate ✦';
+  const btnShape = settings?.gate_btn_shape || 'circle';
+  const btnOpacity = settings?.gate_btn_bg_opacity !== undefined ? settings.gate_btn_bg_opacity : 0.5;
+  const btnBorderColor = settings?.gate_btn_border_color || '#D4AF37';
+  const btnAnimStyle = settings?.gate_btn_anim_style || 'pulse';
 
   useEffect(() => {
     const canvas = particleCanvasRef.current;
@@ -113,20 +124,23 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
     };
   }, []);
 
-  const handlePlayVideo = () => {
+  const triggerMusicPlayback = () => {
     if (typeof (window as any).startGlobalWeddingMusic === 'function') {
       (window as any).startGlobalWeddingMusic();
     }
     window.dispatchEvent(new Event('play_wedding_music'));
     if (onStartPlay) onStartPlay();
-    if (!videoRef.current) return;
+  };
+
+  const handlePlayVideo = () => {
+    triggerMusicPlayback();
+    if (!videoRef.current) {
+      handleOpen();
+      return;
+    }
     
     if (hasStarted) {
-      if (videoRef.current.paused) {
-        videoRef.current.play().catch(e => console.error(e));
-      } else {
-        videoRef.current.pause();
-      }
+      handleOpen();
       return;
     }
 
@@ -146,11 +160,7 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
   };
 
   const handleOpen = () => {
-    if (typeof (window as any).startGlobalWeddingMusic === 'function') {
-      (window as any).startGlobalWeddingMusic();
-    }
-    window.dispatchEvent(new Event('play_wedding_music'));
-    if (onStartPlay) onStartPlay();
+    triggerMusicPlayback();
     onOpen(true);
   };
 
@@ -161,16 +171,28 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.04 }}
       transition={{ duration: 1.4, ease: [0.4, 0, 0.2, 1] }}
-      className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center bg-black pointer-events-auto"
+      className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center bg-gradient-to-br from-[#1a0c02] via-[#2c1706] to-[#0d0501] pointer-events-auto"
     >
-      {/* Full Screen Video */}
+      {/* Royal Backdrop Image & Ambient Overlay (Visible instantly while video buffers) */}
+      <img
+        src="/traditional-card.png"
+        alt="Wedding Gate Poster"
+        className="absolute inset-0 w-full h-full object-cover opacity-50 mix-blend-overlay filter brightness-75 scale-105 pointer-events-none"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/70 pointer-events-none" />
+
+      {/* Full Screen Video - Fades in smoothly once loaded */}
       <video
         ref={videoRef}
         src={videoSrc}
-        className="absolute inset-0 w-full h-full object-cover"
+        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+          isVideoLoaded ? 'opacity-100' : 'opacity-0'
+        }`}
         playsInline
         muted={true}
         preload="auto"
+        onCanPlay={() => setIsVideoLoaded(true)}
+        onLoadedData={() => setIsVideoLoaded(true)}
         onEnded={handleVideoEnded}
         onClick={handlePlayVideo}
       />
@@ -181,13 +203,108 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
         className="absolute inset-0 pointer-events-none w-full h-full z-10 opacity-80"
       />
 
-      {/* Invisible Full-Screen Tap Capture */}
-      {!hasStarted && (
-        <div 
-          onClick={handlePlayVideo}
-          className="absolute inset-0 bg-transparent cursor-pointer z-20"
-        />
-      )}
+      {/* Circular "Tap to Open" Button on Gate */}
+      <AnimatePresence>
+        {!hasStarted && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.7, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.15, rotate: -30, filter: 'blur(8px)' }}
+            transition={{ duration: 0.7, ease: [0.34, 1.56, 0.64, 1] }}
+            onClick={handlePlayVideo}
+            className="absolute z-30 cursor-pointer flex items-center justify-center select-none"
+          >
+            {/* Outer Expanding Pulse Waves - Slow & Graceful */}
+            <motion.div
+              animate={{
+                scale: [1, 1.4, 1.75],
+                opacity: [0.65, 0.2, 0],
+              }}
+              transition={{
+                duration: 4.5,
+                repeat: Infinity,
+                ease: [0.4, 0, 0.2, 1],
+              }}
+              className="absolute w-36 h-36 md:w-44 md:h-44 rounded-full border-2 border-amber-300/60 pointer-events-none"
+            />
+            <motion.div
+              animate={{
+                scale: [1, 1.3, 1.55],
+                opacity: [0.45, 0.15, 0],
+              }}
+              transition={{
+                duration: 4.5,
+                repeat: Infinity,
+                delay: 1.2,
+                ease: [0.4, 0, 0.2, 1],
+              }}
+              className="absolute w-36 h-36 md:w-44 md:h-44 rounded-full border border-white/50 pointer-events-none"
+            />
+
+            {/* Rotating Dashed Accent Ring - Slow & Royal */}
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{
+                duration: 24,
+                repeat: Infinity,
+                ease: 'linear',
+              }}
+              className="absolute w-36 h-36 md:w-44 md:h-44 rounded-full border-2 border-dashed border-amber-300/40 pointer-events-none"
+            />
+
+            {/* Main Configurable Gate Button */}
+            <motion.div
+              animate={btnAnimStyle === 'none' ? {} : {
+                scale: [1, 1.07, 0.98, 1.05, 1],
+                boxShadow: [
+                  `0 0 25px ${btnBorderColor}55, 0 0 40px rgba(0, 0, 0, 0.7)`,
+                  `0 0 50px ${btnBorderColor}AA, 0 0 55px ${btnBorderColor}55`,
+                  '0 0 20px rgba(0, 0, 0, 0.6), 0 0 25px rgba(0, 0, 0, 0.7)',
+                  `0 0 45px ${btnBorderColor}99, 0 0 50px ${btnBorderColor}44`,
+                  `0 0 25px ${btnBorderColor}55, 0 0 40px rgba(0, 0, 0, 0.7)`,
+                ],
+              }}
+              transition={{
+                duration: 4.2,
+                repeat: Infinity,
+                ease: [0.4, 0, 0.2, 1],
+              }}
+              style={{
+                backgroundColor: `rgba(0, 0, 0, ${btnOpacity})`,
+                borderColor: btnBorderColor,
+              }}
+              className={`${
+                btnShape === 'pill'
+                  ? 'px-8 py-5 rounded-full min-w-[200px]'
+                  : btnShape === 'square'
+                  ? 'w-32 h-32 md:w-40 md:h-40 rounded-3xl'
+                  : 'w-32 h-32 md:w-40 md:h-40 rounded-full'
+              } border-2 backdrop-blur-md flex flex-col items-center justify-center p-4 transition-colors duration-500 hover:bg-black/75 active:scale-95 group relative overflow-hidden`}
+            >
+              {/* Inner Radial Shimmer Glow */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-amber-400/25 via-transparent to-transparent opacity-40 group-hover:opacity-80 transition-opacity duration-500" />
+
+              {/* Dynamic Text with Smooth Zoom Pulse */}
+              <motion.span
+                animate={btnAnimStyle === 'none' ? {} : { scale: [1, 1.05, 1] }}
+                transition={{
+                  duration: 4.2,
+                  repeat: Infinity,
+                  ease: [0.4, 0, 0.2, 1],
+                }}
+                className="relative z-10 text-white font-serif font-bold text-xs md:text-sm tracking-[0.2em] uppercase text-center w-full block group-hover:text-amber-200 transition-colors drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]"
+              >
+                {btnText}
+              </motion.span>
+              {btnSubtitle && (
+                <span className="relative z-10 text-[9px] md:text-[10px] text-amber-200/90 tracking-widest uppercase mt-1 font-light text-center w-full block group-hover:scale-105 transition-transform duration-300">
+                  {btnSubtitle}
+                </span>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

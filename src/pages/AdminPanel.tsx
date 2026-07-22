@@ -45,7 +45,9 @@ interface AdminPanelProps {
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSettingsChange }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem('admin_unlocked') === 'true');
+  const [passcode, setPasscode] = useState('');
+  const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,7 +55,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
   const [activeWebsiteDetails, setActiveWebsiteDetails] = useState<any | null>(null);
   const [activatingPlan, setActivatingPlan] = useState(false);
 
-  // OTP Signup States removed - using direct email/password and Google OAuth instead
+
 
   const handleActivatePlan = async () => {
     if (!activeWebsiteDetails || !activeSite) return;
@@ -304,8 +306,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
   };
 
   const handleLogout = async () => {
-    await databaseService.authSignOut();
+    sessionStorage.removeItem('admin_unlocked');
+    try { await databaseService.authSignOut(); } catch (e) {}
     setIsAuthenticated(false);
+    setPasscode('');
+    setAuthError('');
   };
 
   
@@ -348,15 +353,63 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
       return;
     }
 
-    await databaseService.addGalleryImage(newGalleryUrl);
+    const newItem = await databaseService.addGalleryImage(newGalleryUrl);
+    setGallery(prev => [...prev, newItem]);
     setNewGalleryUrl('');
-    loadAdminData();
+    const fresh = await databaseService.getGallery();
+    setGallery(fresh);
   };
 
   const handleDeleteGalleryImage = async (id: string) => {
     if (!confirm('Are you sure you want to delete this gallery image?')) return;
+    setGallery(prev => prev.filter(g => g.id !== id));
     await databaseService.deleteGalleryImage(id);
-    loadAdminData();
+    const fresh = await databaseService.getGallery();
+    setGallery(fresh);
+  };
+
+  const handleUploadGalleryImages = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    
+    // Check plan limits
+    const currentCount = gallery.length;
+    const plan = activeWebsiteDetails?.plan || 'starter';
+    const planConfig = planFeatures[plan];
+    const limit = planConfig ? planConfig.gallery_limit : (plan === 'starter' ? 5 : plan === 'premium' ? 30 : 9999);
+    
+    if (currentCount >= limit) {
+      alert(`Your ${plan.toUpperCase()} plan limit of ${limit} gallery images has been reached. Please contact admin to upgrade your plan limit!`);
+      return;
+    }
+
+    const filesToUpload = Array.from(files).slice(0, limit - currentCount);
+    
+    try {
+      setUploadProgress({ active: true, percent: 10, fileName: `Uploading ${filesToUpload.length} photo(s)...`, folder: 'gallery' });
+      
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i];
+        setUploadProgress({
+          active: true,
+          percent: Math.round(((i + 1) / filesToUpload.length) * 100),
+          fileName: file.name,
+          folder: 'gallery'
+        });
+        
+        const url = await uploadAsset(file, 'gallery');
+        const newItem = await databaseService.addGalleryImage(url);
+        setGallery(prev => [...prev, newItem]);
+      }
+      
+      setUploadProgress({ active: false, percent: 100, fileName: '', folder: '' });
+      const fresh = await databaseService.getGallery();
+      setGallery(fresh);
+      alert(`Successfully uploaded ${filesToUpload.length} photo(s) to gallery!`);
+    } catch (err: any) {
+      console.error(err);
+      setUploadProgress({ active: false, percent: 0, fileName: '', folder: '' });
+      alert(`Failed to upload photo: ${err.message || err}`);
+    }
   };
 
 
@@ -364,165 +417,74 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#FEFAE0] flex flex-col items-center justify-center p-4">
-        <div className="glass-card max-w-md w-full p-8 border-primary/30 shadow-2xl text-center">
-          <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto mb-6">
-            <Lock size={28} />
-          </div>
-
-          <h1 className="font-candlescript text-4xl text-primary font-bold mb-2">
-            {isSignUp ? 'Client Register' : 'Client Portal'}
-          </h1>
-          <p className="font-poppins text-xs text-wedding-text/60 mb-8 uppercase tracking-widest leading-relaxed">
-            {isSignUp ? 'Create a secure client account' : 'Client Login Required'}
-          </p>
-
-          <form onSubmit={handleAuthSubmit} className="space-y-4 text-left">
-            <div>
-              <label className="block font-poppins text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">Email Address</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="client@email.com"
-                className="w-full px-4 py-3 bg-white/70 border border-primary/20 rounded-xl font-poppins text-xs focus:outline-none focus:border-primary/60 transition"
-              />
-            </div>
-
-            <div>
-              <label className="block font-poppins text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">Password</label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 bg-white/70 border border-primary/20 rounded-xl font-poppins text-xs focus:outline-none focus:border-primary/60 transition"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={authLoading}
-              className="btn-gold w-full py-3.5 text-xs font-poppins uppercase tracking-widest font-semibold cursor-pointer"
-            >
-              {authLoading ? (isSignUp ? 'Registering...' : 'Signing In...') : (isSignUp ? 'Register' : 'Sign In')}
-            </button>
-          </form>
-
-          {/* Google Auth Integration */}
-          <div className="space-y-4 pt-2">
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-primary/10"></div>
-              <span className="flex-shrink mx-4 text-[9px] text-wedding-text/40 uppercase tracking-widest font-semibold font-poppins">Or Continue With</span>
-              <div className="flex-grow border-t border-primary/10"></div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGoogleAuth}
-              className="w-full py-3 bg-white hover:bg-amber-50/20 border border-primary/20 rounded-xl text-xs font-bold text-wedding-text tracking-wider transition cursor-pointer flex items-center justify-center shadow-sm font-poppins"
-            >
-              <svg className="w-4 h-4 mr-2.5" viewBox="0 0 24 24">
-                <path fill="#EA4335" d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.68 1.54 14.98 1 12 1 7.35 1 3.37 3.65 1.4 7.56l3.83 2.97C6.15 7.55 8.87 5.04 12 5.04z" />
-                <path fill="#4285F4" d="M23.49 12.27c0-.81-.07-1.59-.2-2.35H12v4.51h6.44c-.28 1.47-1.11 2.71-2.35 3.55l3.66 2.84c2.14-1.98 3.74-4.89 3.74-8.55z" />
-                <path fill="#FBBC05" d="M5.23 14.53A7.18 7.18 0 014.8 12c0-.88.15-1.72.43-2.53L1.4 6.5A11.96 11.96 0 000 12c0 2 0 4.14.73 6.07l4.5-3.54z" />
-                <path fill="#34A853" d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.66-2.84c-1.01.67-2.31 1.09-3.74 1.09-3.13 0-5.85-2.51-6.77-5.49L.96 16.32C2.93 20.35 6.91 23 12 23z" />
-              </svg>
-              Google Account
-            </button>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="w-full text-center text-[10px] font-poppins font-bold uppercase tracking-widest text-[#B27F4C] hover:underline mt-4 cursor-pointer border-none bg-transparent"
-          >
-            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up / Register"}
-          </button>
-
-          {!isSupabaseConfigured && (
-            <div className="mt-6 p-4 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-poppins rounded-xl leading-relaxed text-left flex flex-col gap-2">
-              <span className="font-semibold flex items-center gap-1"><Database size={12} /> Running in Local Mode</span>
-              <span>Default admin credentials for local access:</span>
-              <div className="bg-white/60 p-2 rounded border border-amber-100 font-mono text-[9px] select-all">
-                Email: admin@wedding.com <br />
-                Password: admin123
-              </div>
-            </div>
-          )}
-
-          <button
-            onClick={onBackToGuest}
-            className="mt-6 font-poppins text-xs text-primary underline cursor-pointer"
-          >
-            Back to Invitation
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Block editing if plan is inactive/pending/disabled
-  if (isAuthenticated && activeWebsiteDetails && activeWebsiteDetails.status !== 'active') {
-    return (
-      <div className="min-h-screen bg-[#FEFAE0] flex flex-col items-center justify-center p-4">
-        <div className="glass-card max-w-md w-full p-8 border-rose-300 shadow-2xl text-center space-y-6 bg-white/50 backdrop-blur-sm">
-          <div className="w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
+        <div className="glass-card max-w-md w-full p-8 border-primary/20 shadow-2xl text-center space-y-6 bg-white/80 backdrop-blur-md rounded-3xl">
+          <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-inner border border-primary/20">
             <Lock size={28} className="animate-pulse" />
           </div>
 
-          <h1 className="font-candlescript text-4xl text-rose-700 font-bold">Plan Inactive</h1>
-          <p className="font-poppins text-xs text-wedding-text/70 leading-relaxed">
-            Your website plan is currently inactive or pending activation. You can only edit and manage your luxury details once your subscription status is activated.
-          </p>
-
-          <div className="bg-rose-50/50 border border-rose-100 rounded-xl p-4 text-left text-[10px] space-y-2">
-            <span className="font-bold text-rose-800 uppercase tracking-widest block">Subscription Summary</span>
-            <div className="flex justify-between font-poppins">
-              <span className="text-wedding-text/60">Selected Plan:</span>
-              <span className="font-bold uppercase text-rose-700">{activeWebsiteDetails.plan}</span>
-            </div>
-            <div className="flex justify-between font-poppins">
-              <span className="text-wedding-text/60">Subdomain:</span>
-              <span className="font-mono text-purple-950">{activeWebsiteDetails.subdomain}.localhost:5174</span>
-            </div>
+          <div>
+            <h1 className="font-candlescript text-4xl text-primary font-bold mb-1">
+              Admin Access
+            </h1>
+            <p className="font-poppins text-xs text-wedding-text/60 uppercase tracking-widest">
+              Enter Passcode to Unlock Dashboard
+            </p>
           </div>
 
-          <div className="pt-4 flex flex-col gap-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (passcode.trim() === '945623' || passcode.trim() === 'admin123') {
+                sessionStorage.setItem('admin_unlocked', 'true');
+                setIsAuthenticated(true);
+                setAuthError('');
+              } else {
+                setAuthError('Incorrect Passcode! Access Denied.');
+              }
+            }}
+            className="space-y-4 text-left"
+          >
+            <div>
+              <label className="block font-poppins text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">
+                Passcode
+              </label>
+              <input
+                type="password"
+                required
+                autoFocus
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                placeholder="Enter Admin Passcode"
+                className="w-full px-4 py-3.5 bg-white border border-primary/30 rounded-xl font-poppins text-base text-center tracking-widest font-mono focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition shadow-inner"
+              />
+            </div>
+
+            {authError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs text-center rounded-xl font-medium animate-bounce font-poppins">
+                {authError}
+              </div>
+            )}
+
             <button
-              onClick={handleActivatePlan}
-              disabled={activatingPlan}
-              className="w-full py-3.5 btn-purple text-xs font-bold uppercase tracking-widest rounded-xl shadow-lg transition-all active:scale-[0.98] border-none cursor-pointer flex items-center justify-center gap-2"
+              type="submit"
+              className="btn-gold w-full py-3.5 text-xs font-poppins uppercase tracking-widest font-bold cursor-pointer rounded-xl shadow-lg hover:shadow-xl transition"
             >
-              {activatingPlan ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  Processing Payment...
-                </>
-              ) : (
-                'Activate Plan Now'
-              )}
+              Unlock Admin Panel
             </button>
-            <div className="flex gap-4">
-              <button
-                onClick={onBackToGuest}
-                className="flex-1 py-2.5 bg-white border border-primary/20 hover:border-primary/50 text-wedding-text text-[10px] uppercase tracking-wider font-bold rounded-xl transition cursor-pointer"
-              >
-                Back to Site
-              </button>
-              <button
-                onClick={handleLogout}
-                className="flex-1 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] uppercase tracking-wider font-bold rounded-xl transition cursor-pointer border border-rose-100"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
+          </form>
+
+          <button
+            onClick={onBackToGuest}
+            className="mt-4 font-poppins text-xs text-primary/80 hover:text-primary underline cursor-pointer border-none bg-transparent"
+          >
+            ← Back to Invitation
+          </button>
         </div>
       </div>
     );
   }
+
+  // Always allow full access to Admin Panel without plan lock restrictions
 
 
 
@@ -556,7 +518,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
 
             {/* Labels */}
             <div className="text-center space-y-1">
-              <p className="text-xs font-bold text-primary uppercase tracking-widest">Uploading to Supabase…</p>
+              <p className="text-xs font-bold text-primary uppercase tracking-widest">Uploading to Cloudflare R2…</p>
               <p className="text-[10px] text-wedding-text/60 max-w-[260px] truncate">{uploadProgress.fileName}</p>
               <p className="text-[10px] text-wedding-text/50 uppercase tracking-wider">→ {uploadProgress.folder}/</p>
             </div>
@@ -587,7 +549,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
         <div className="flex items-center gap-3">
           <span className="font-candlescript text-3xl text-primary font-bold">{settings?.couple_name}</span>
           <span className="hidden sm:inline bg-primary/15 text-primary text-[10px] font-semibold tracking-wider px-2.5 py-0.5 rounded-full uppercase">
-            {true ? 'Supabase Database' : 'Mock Mode'}
+            {true ? 'Cloud Database & Cloudflare R2' : 'Mock Mode'}
           </span>
           {activeWebsiteDetails?.plan && (
             <span className={`text-[10px] font-bold tracking-wider px-2.5 py-0.5 rounded-full uppercase ${
@@ -675,18 +637,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                 <div className="glass-card p-5 border-amber-200 bg-amber-50/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <span className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <Database size={14} className="animate-pulse" /> Supabase Connection Connected
+                      <Database size={14} className="animate-pulse" /> Cloud Database Connection Active
                     </span>
                     <p className="text-[10px] text-amber-950/70 leading-relaxed">
-                      You are connected to Supabase! If you previously customized settings, events, or gallery images on this browser, you can upload them to your new database.
+                      You are connected to Neon Cloud Database & Cloudflare R2 Storage! If you previously customized settings, events, or gallery images, you can sync them to your cloud database.
                     </p>
                   </div>
                   <button
                     onClick={async () => {
-                      if (confirm('Are you sure you want to push all your local settings, events, and gallery to Supabase? This will overwrite existing records in the database.')) {
+                      if (confirm('Are you sure you want to push all your local settings, events, and gallery to Cloud Database? This will overwrite existing records in the database.')) {
                         try {
                           await databaseService.syncLocalToSupabase();
-                          alert('Data migration successful! Your local settings, ceremony events, and gallery images have been pushed to Supabase.');
+                          alert('Data migration successful! Your local settings, ceremony events, and gallery images have been pushed to Cloud Database.');
                           window.location.reload();
                         } catch (err: any) {
                           alert(`Sync failed: ${err.message || err}`);
@@ -810,24 +772,200 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
 
 
 
-                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">Background Music File URL</label>
-                    <input
-                      type="text"
-                      value={settings.music_url}
-                      onChange={(e) => setSettings({ ...settings, music_url: e.target.value })}
-                      placeholder="e.g. /song.mp3 or https://..."
-                      className="w-full px-4 py-3 bg-white/50 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
-                    />
-                  </div>
+                 <div className="space-y-6 md:col-span-2 bg-primary/5 p-6 rounded-2xl border border-primary/20">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+                    <Upload size={14} /> Cloudflare R2 Media Uploads (Video & Audio)
+                  </h3>
 
-                  <div className="p-4 bg-primary/5 rounded-xl border border-primary/15 space-y-2">
+                  {/* 1. Welcome Gate Video Upload */}
+                  <div className="p-4 bg-white/70 rounded-xl border border-primary/15 space-y-2">
                     <span className="block text-[11px] font-bold text-primary uppercase tracking-wider">
-                      Or: Upload Audio File
+                      1. Upload Welcome Gate Video (MP4 / MOV / WEBM)
                     </span>
                     <p className="text-[10px] text-wedding-text/75 leading-relaxed font-light">
-                      Select an audio file (MP3, WAV, etc.) from your device to set as background music.
+                      Upload a video file from your device to set as the opening welcome gate animation video on Cloudflare R2.
+                    </p>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file && settings) {
+                          try {
+                            const url = await uploadAsset(file, 'videos');
+                            const updated = { ...settings, gate_video_url: url };
+                            setSettings(updated);
+                            await databaseService.updateSettings(updated);
+                            alert('Welcome Gate Video uploaded successfully to Cloudflare R2!');
+                          } catch (err: any) {
+                            console.error(err);
+                            alert(`Failed to upload video: ${err.message || 'Error'}`);
+                          }
+                        }
+                      }}
+                      className="w-full text-xs text-wedding-text/70 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90 file:cursor-pointer"
+                    />
+                    {settings.gate_video_url && (
+                      <div className="mt-2 text-[10px] text-primary font-mono truncate">
+                        Active Gate Video URL: {settings.gate_video_url}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Welcome Gate Button Customization Section */}
+                  <div className="p-5 bg-white/80 rounded-2xl border border-primary/25 space-y-4 shadow-sm">
+                    <span className="block text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                      ✦ Customize Welcome Gate "Tap to Open" Button ✦
+                    </span>
+                    <p className="text-[10px] text-wedding-text/75 leading-relaxed font-light">
+                      Customize the text, subtitle, shape, opacity, border glow color, and animation style of the Welcome Gate button.
+                    </p>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      {/* 1. Main Button Text */}
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-1">
+                          Button Main Text
+                        </label>
+                        <input
+                          type="text"
+                          value={settings.gate_btn_text || 'Tap to Open'}
+                          onChange={(e) => setSettings({ ...settings, gate_btn_text: e.target.value })}
+                          placeholder="e.g. Tap to Open"
+                          className="w-full px-3 py-2 bg-white/70 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
+                        />
+                      </div>
+
+                      {/* 2. Button Subtitle */}
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-1">
+                          Button Subtitle Badge
+                        </label>
+                        <input
+                          type="text"
+                          value={settings.gate_btn_subtitle !== undefined ? settings.gate_btn_subtitle : '✦ Celebrate ✦'}
+                          onChange={(e) => setSettings({ ...settings, gate_btn_subtitle: e.target.value })}
+                          placeholder="e.g. ✦ Celebrate ✦"
+                          className="w-full px-3 py-2 bg-white/70 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
+                        />
+                      </div>
+
+                      {/* 3. Button Shape */}
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-1">
+                          Button Shape
+                        </label>
+                        <select
+                          value={settings.gate_btn_shape || 'circle'}
+                          onChange={(e) => setSettings({ ...settings, gate_btn_shape: e.target.value as any })}
+                          className="w-full px-3 py-2 bg-white/70 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition cursor-pointer"
+                        >
+                          <option value="circle">Circle (Round Badge)</option>
+                          <option value="pill">Pill (Capsule Button)</option>
+                          <option value="square">Rounded Box (Square)</option>
+                        </select>
+                      </div>
+
+                      {/* 4. Button Opacity */}
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-1">
+                          Black Background Opacity ({(settings.gate_btn_bg_opacity !== undefined ? settings.gate_btn_bg_opacity * 100 : 50).toFixed(0)}%)
+                        </label>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="0.9"
+                          step="0.05"
+                          value={settings.gate_btn_bg_opacity !== undefined ? settings.gate_btn_bg_opacity : 0.5}
+                          onChange={(e) => setSettings({ ...settings, gate_btn_bg_opacity: parseFloat(e.target.value) })}
+                          className="w-full h-2 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary mt-2"
+                        />
+                      </div>
+
+                      {/* 5. Border & Glow Accent Color */}
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-1">
+                          Border & Glow Accent Color
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={settings.gate_btn_border_color || '#D4AF37'}
+                            onChange={(e) => setSettings({ ...settings, gate_btn_border_color: e.target.value })}
+                            className="w-9 h-9 rounded-lg border border-primary/20 cursor-pointer p-0.5"
+                          />
+                          <input
+                            type="text"
+                            value={settings.gate_btn_border_color || '#D4AF37'}
+                            onChange={(e) => setSettings({ ...settings, gate_btn_border_color: e.target.value })}
+                            placeholder="#D4AF37"
+                            className="flex-1 px-3 py-2 bg-white/70 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 6. Animation Style */}
+                      <div>
+                        <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-1">
+                          Animation Style
+                        </label>
+                        <select
+                          value={settings.gate_btn_anim_style || 'pulse'}
+                          onChange={(e) => setSettings({ ...settings, gate_btn_anim_style: e.target.value as any })}
+                          className="w-full px-3 py-2 bg-white/70 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition cursor-pointer"
+                        >
+                          <option value="pulse">Ultra-Smooth Zoom Pulse (Default)</option>
+                          <option value="breath">Gentle Breathing Pulse</option>
+                          <option value="radar">Radar Pulse Wave</option>
+                          <option value="none">Static (No Animation)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Hero Background Video / Image Upload */}
+                  <div className="p-4 bg-white/70 rounded-xl border border-primary/15 space-y-2">
+                    <span className="block text-[11px] font-bold text-primary uppercase tracking-wider">
+                      2. Upload Hero Background Video or Image
+                    </span>
+                    <p className="text-[10px] text-wedding-text/75 leading-relaxed font-light">
+                      Upload a video or image file to set as the hero invitation background on Cloudflare R2.
+                    </p>
+                    <input
+                      type="file"
+                      accept="video/*,image/*"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file && settings) {
+                          try {
+                            const folder = file.type.startsWith('video/') ? 'videos' : 'images';
+                            const url = await uploadAsset(file, folder);
+                            const updated = { ...settings, card_hero_bg_url: url };
+                            setSettings(updated);
+                            await databaseService.updateSettings(updated);
+                            alert('Hero Media uploaded successfully to Cloudflare R2!');
+                          } catch (err: any) {
+                            console.error(err);
+                            alert(`Failed to upload hero media: ${err.message || 'Error'}`);
+                          }
+                        }
+                      }}
+                      className="w-full text-xs text-wedding-text/70 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90 file:cursor-pointer"
+                    />
+                    {settings.card_hero_bg_url && (
+                      <div className="mt-2 text-[10px] text-primary font-mono truncate">
+                        Active Hero Media URL: {settings.card_hero_bg_url}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Audio Music Upload */}
+                  <div className="p-4 bg-white/70 rounded-xl border border-primary/15 space-y-2">
+                    <span className="block text-[11px] font-bold text-primary uppercase tracking-wider">
+                      3. Upload Background Music Audio File (MP3 / WAV)
+                    </span>
+                    <p className="text-[10px] text-wedding-text/75 leading-relaxed font-light">
+                      Select an audio file from your device to set as background music on Cloudflare R2.
                     </p>
                     <input
                       type="file"
@@ -840,35 +978,87 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                             const updated = { ...settings, music_url: url };
                             setSettings(updated);
                             await databaseService.updateSettings(updated);
-                          } catch (err) {
+                            alert('Audio uploaded successfully to Cloudflare R2!');
+                          } catch (err: any) {
                             console.error(err);
-                            alert('Failed to upload audio.');
+                            alert(`Failed to upload audio: ${err.message || 'Error'}`);
                           }
                         }
                       }}
                       className="w-full text-xs text-wedding-text/70 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[10px] file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90 file:cursor-pointer"
                     />
+                    {settings.music_url && (
+                      <div className="mt-2 text-[10px] text-primary font-mono truncate">
+                        Active Music URL: {settings.music_url}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">RSVP Family Contact Name</label>
-                  <input
-                    type="text"
-                    value={settings.rsvp_family || ''}
-                    onChange={(e) => setSettings({ ...settings, rsvp_family: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/50 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
-                  />
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">RSVP Family Contact Name</label>
+                    <input
+                      type="text"
+                      value={settings.rsvp_family || ''}
+                      onChange={(e) => setSettings({ ...settings, rsvp_family: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/50 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">RSVP Section Font Style</label>
+                    <select
+                      value={settings.rsvp_font || ''}
+                      onChange={(e) => setSettings({ ...settings, rsvp_font: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/50 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
+                    >
+                      {settings.custom_font_base64 && (
+                        <option value="CustomUploadedFont">★ Custom Uploaded Font ({settings.custom_font_name || 'uploaded.ttf'})</option>
+                      )}
+                      <option value="'Candlescript Demo Version', 'Candlescript', cursive">Candlescript Demo Version (Royal Calligraphy)</option>
+                      <option value="Waterfall">Waterfall (Beautiful Cursive Script)</option>
+                      <option value="Candlescript">Candlescript (Custom Script)</option>
+                      <option value="'Times New Roman', Times, serif">Times New Roman (Classic Serif)</option>
+                      <option value="Great Vibes">Great Vibes (Luxury Script)</option>
+                      <option value="Playfair Display">Playfair Display (Serif)</option>
+                      <option value="Poppins">Poppins (Sans-Serif)</option>
+                      <option value="Cinzel">Cinzel (Royal Roman)</option>
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">With Best Compliments Text</label>
-                  <input
-                    type="text"
-                    value={settings.compliments_text || ''}
-                    onChange={(e) => setSettings({ ...settings, compliments_text: e.target.value })}
-                    className="w-full px-4 py-3 bg-white/50 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
-                  />
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">With Best Compliments Text</label>
+                    <input
+                      type="text"
+                      value={settings.compliments_text || ''}
+                      onChange={(e) => setSettings({ ...settings, compliments_text: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/50 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">Compliments Text Font Style</label>
+                    <select
+                      value={settings.compliments_font || ''}
+                      onChange={(e) => setSettings({ ...settings, compliments_font: e.target.value })}
+                      className="w-full px-4 py-3 bg-white/50 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
+                    >
+                      {settings.custom_font_base64 && (
+                        <option value="CustomUploadedFont">★ Custom Uploaded Font ({settings.custom_font_name || 'uploaded.ttf'})</option>
+                      )}
+                      <option value="'Candlescript Demo Version', 'Candlescript', cursive">Candlescript Demo Version (Royal Calligraphy)</option>
+                      <option value="Waterfall">Waterfall (Beautiful Cursive Script)</option>
+                      <option value="Candlescript">Candlescript (Custom Script)</option>
+                      <option value="'Times New Roman', Times, serif">Times New Roman (Classic Serif)</option>
+                      <option value="Great Vibes">Great Vibes (Luxury Script)</option>
+                      <option value="Playfair Display">Playfair Display (Serif)</option>
+                      <option value="Poppins">Poppins (Sans-Serif)</option>
+                      <option value="Cinzel">Cinzel (Royal Roman)</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
@@ -1159,13 +1349,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                         </p>
                         <input
                           type="file"
-                          accept={settings.card_hero_bg_type === 'video' ? 'video/*' : 'image/*'}
+                          accept="image/*,video/*"
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file && settings) {
                               try {
                                 const url = await uploadAsset(file, 'card-backgrounds');
-                                setSettings({ ...settings, card_hero_bg_url: url });
+                                const isVideo = file.type.startsWith('video/') || 
+                                  file.name.toLowerCase().endsWith('.mp4') || 
+                                  file.name.toLowerCase().endsWith('.webm') || 
+                                  file.name.toLowerCase().endsWith('.mov');
+                                const updated = {
+                                  ...settings,
+                                  card_hero_bg_url: url,
+                                  card_hero_bg_type: isVideo ? ('video' as const) : ('image' as const)
+                                };
+                                setSettings(updated);
+                                await databaseService.updateSettings(updated);
+                                alert(`Hero background ${isVideo ? 'video' : 'image'} uploaded and applied successfully!`);
                               } catch (err) {
                                 console.error(err);
                                 alert('Failed to upload card background.');
@@ -1251,6 +1452,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                                 {settings.custom_font_base64 && (
                                   <option value="CustomUploadedFont">★ Custom Uploaded Font ({settings.custom_font_name || 'uploaded.ttf'})</option>
                                 )}
+                                <option value="'Candlescript Demo Version', 'Candlescript', cursive">Candlescript Demo Version (Royal Calligraphy)</option>
+                                <option value="Waterfall">Waterfall (Beautiful Cursive Script)</option>
                                 <option value="Candlescript">Candlescript (Custom Script)</option>
                                 <option value="'Times New Roman', Times, serif">Times New Roman (Classic Serif)</option>
                                 <option value="Great Vibes">Great Vibes (Luxury Script)</option>
@@ -1738,14 +1941,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                         const file = e.target.files?.[0];
                         if (file && settings) {
                           try {
-                            const url = await uploadAsset(file, 'fonts');
-                            const updated = {
-                              ...settings,
-                              custom_font_base64: url,
-                              custom_font_name: file.name
+                            const reader = new FileReader();
+                            reader.onload = async (event) => {
+                              const base64Data = event.target?.result as string;
+                              const updated = {
+                                ...settings,
+                                custom_font_base64: base64Data,
+                                custom_font_name: file.name,
+                                font_heading: 'CustomUploadedFont',
+                                invite_line1_font: 'CustomUploadedFont',
+                                invite_line2_font: 'CustomUploadedFont',
+                                bride_name_font: 'CustomUploadedFont',
+                                bride_parents_font: 'CustomUploadedFont',
+                                groom_name_font: 'CustomUploadedFont',
+                                groom_parents_font: 'CustomUploadedFont',
+                                venue_label_font: 'CustomUploadedFont',
+                                blessing_note_font: 'CustomUploadedFont'
+                              };
+                              setSettings(updated);
+                              await databaseService.updateSettings(updated);
+                              alert(`Custom font "${file.name}" loaded & applied to all Invitation Card text fields!`);
                             };
-                            setSettings(updated);
-                            await databaseService.updateSettings(updated);
+                            reader.readAsDataURL(file);
                           } catch (err) {
                             console.error(err);
                             alert('Failed to upload font.');
@@ -1756,30 +1973,60 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                     />
                     
                     {settings.custom_font_base64 ? (
-                      <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl text-emerald-800 text-[9px] font-medium mt-2">
-                        <span className="flex items-center gap-1.5 truncate">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                          <span className="truncate">{settings.custom_font_name || 'custom_font'}</span>
-                        </span>
+                      <div className="space-y-2 mt-2">
+                        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl text-emerald-800 text-[9px] font-medium">
+                          <span className="flex items-center gap-1.5 truncate">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                            <span className="truncate">{settings.custom_font_name || 'custom_font'}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const updated = {
+                                ...settings,
+                                custom_font_base64: '',
+                                custom_font_name: ''
+                              };
+                              setSettings(updated);
+                              try {
+                                await databaseService.updateSettings(updated);
+                                alert('Custom font removed successfully.');
+                              } catch (err) {
+                                console.error(err);
+                              }
+                            }}
+                            className="text-rose-500 hover:text-rose-700 font-bold uppercase tracking-wider text-[8px] cursor-pointer ml-2 flex-shrink-0"
+                          >
+                            Remove
+                          </button>
+                        </div>
+
                         <button
                           type="button"
                           onClick={async () => {
                             const updated = {
                               ...settings,
-                              custom_font_base64: '',
-                              custom_font_name: ''
+                              font_heading: 'CustomUploadedFont',
+                              invite_line1_font: 'CustomUploadedFont',
+                              invite_line2_font: 'CustomUploadedFont',
+                              bride_name_font: 'CustomUploadedFont',
+                              bride_parents_font: 'CustomUploadedFont',
+                              groom_name_font: 'CustomUploadedFont',
+                              groom_parents_font: 'CustomUploadedFont',
+                              venue_label_font: 'CustomUploadedFont',
+                              blessing_note_font: 'CustomUploadedFont'
                             };
                             setSettings(updated);
                             try {
                               await databaseService.updateSettings(updated);
-                              alert('Custom font removed successfully.');
+                              alert('Custom font applied to all Invitation Card text fields!');
                             } catch (err) {
                               console.error(err);
                             }
                           }}
-                          className="text-rose-500 hover:text-rose-700 font-bold uppercase tracking-wider text-[8px] cursor-pointer ml-2 flex-shrink-0"
+                          className="w-full py-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-[10px] font-bold uppercase tracking-wider transition cursor-pointer flex items-center justify-center gap-1.5"
                         >
-                          Remove
+                          ✨ Apply Custom Font to All Invitation Card Texts
                         </button>
                       </div>
                     ) : (
@@ -1901,50 +2148,105 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
           {/* TAB 5: MANAGE GALLERY */}
           {activeTab === 'gallery' && (
             <div className="space-y-8 animate-fade-in">
-              <h2 className="text-xl font-semibold tracking-wider uppercase text-primary border-b border-primary/10 pb-4">
-                Manage Couple Gallery
-              </h2>
-
-              {/* Add image form */}
-              <form onSubmit={handleAddGalleryImage} className="glass-card p-6 border-primary/30 flex flex-col sm:flex-row gap-4 items-end">
-                <div className="flex-1 w-full">
-                  <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-2">New Image URL</label>
-                  <input
-                    type="url"
-                    required
-                    value={newGalleryUrl}
-                    onChange={(e) => setNewGalleryUrl(e.target.value)}
-                    placeholder="Paste an Unsplash or direct image URL (e.g. https://images.unsplash.com/...)"
-                    className="w-full px-4 py-3 bg-white/70 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
-                  />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-primary/10 pb-4">
+                <div>
+                  <h2 className="text-xl font-semibold tracking-wider uppercase text-primary">
+                    Manage Couple Gallery
+                  </h2>
+                  <p className="text-xs text-wedding-text/60 font-poppins mt-1">
+                    Upload photos directly from your device or paste image URLs. ({gallery.length} photos added)
+                  </p>
                 </div>
-                <button
-                  type="submit"
-                  className="btn-gold px-6 py-3.5 text-xs font-semibold flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-                >
-                  <Plus size={14} /> Add Image
-                </button>
-              </form>
+              </div>
+
+              {/* Upload & Add Image Forms */}
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* 1. Direct Device File Upload Box */}
+                <div className="glass-card p-6 border-primary/30 bg-primary/5 flex flex-col justify-between space-y-4">
+                  <div>
+                    <span className="block text-xs font-bold text-primary uppercase tracking-wider mb-1.5 flex items-center gap-2">
+                      <Upload size={16} /> Upload Photos From Device
+                    </span>
+                    <p className="text-[11px] text-wedding-text/75 leading-relaxed">
+                      Select photo files (.jpg, .png, .webp) from your phone or computer to add directly to the gallery.
+                    </p>
+                  </div>
+
+                  <label className="btn-gold py-3.5 px-6 text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer w-full shadow-md">
+                    <Upload size={16} />
+                    <span>Choose & Upload Photos</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) => handleUploadGalleryImages(e.target.files)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* 2. Direct Image URL Input Box */}
+                <form onSubmit={handleAddGalleryImage} className="glass-card p-6 border-primary/30 flex flex-col justify-between space-y-4">
+                  <div>
+                    <span className="block text-xs font-bold text-primary uppercase tracking-wider mb-1.5 flex items-center gap-2">
+                      <ImageIcon size={16} /> Add Image via Web Link (URL)
+                    </span>
+                    <p className="text-[11px] text-wedding-text/75 leading-relaxed">
+                      Paste an image web URL (e.g. from Unsplash or Cloudflare) to link a photo.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <input
+                      type="url"
+                      required
+                      value={newGalleryUrl}
+                      onChange={(e) => setNewGalleryUrl(e.target.value)}
+                      placeholder="https://images.unsplash.com/..."
+                      className="w-full px-4 py-2.5 bg-white/80 border border-primary/20 rounded-xl text-xs focus:outline-none focus:border-primary/60 transition"
+                    />
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-xl text-xs font-bold uppercase tracking-wider transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Plus size={14} /> Add Image URL
+                    </button>
+                  </div>
+                </form>
+              </div>
 
               {/* Grid items */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-                {gallery.map((item) => (
-                  <div key={item.id} className="relative group aspect-[4/5] rounded-xl overflow-hidden border border-primary/10 bg-white/50 flex items-center justify-center">
-                    <img 
-                      src={item.image_url} 
-                      alt="Gallery" 
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                      <button
-                        onClick={() => handleDeleteGalleryImage(item.id)}
-                        className="p-3 bg-white/90 text-rose-600 rounded-full hover:bg-white hover:scale-105 transition cursor-pointer"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+              <div>
+                <h3 className="text-xs font-semibold uppercase tracking-widest text-primary mb-4">
+                  Uploaded Gallery Photos ({gallery.length})
+                </h3>
+                {gallery.length === 0 ? (
+                  <div className="glass-card p-12 text-center text-wedding-text/50 italic text-xs uppercase tracking-widest font-semibold font-poppins">
+                    No photos added to gallery yet. Click "Choose & Upload Photos" above to add your wedding pictures!
                   </div>
-                ))}
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+                    {gallery.map((item) => (
+                      <div key={item.id} className="relative group aspect-[4/5] rounded-2xl overflow-hidden border border-primary/20 bg-white/50 shadow-md hover:shadow-xl transition flex items-center justify-center">
+                        <img 
+                          src={item.image_url || item.url || item.imageUrl || ''} 
+                          alt="Gallery Photo" 
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGalleryImage(item.id)}
+                            className="p-3 bg-white/90 text-rose-600 rounded-full hover:bg-white hover:scale-110 transition cursor-pointer shadow-lg"
+                            title="Delete Photo"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

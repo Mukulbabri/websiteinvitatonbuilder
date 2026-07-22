@@ -11,12 +11,13 @@ interface MusicPlayerProps {
 const DEFAULT_MUSIC_FALLBACK = '/music.mp3';
 
 const getAbsoluteUrl = (url: string) => {
-  if (!url) return '';
+  if (!url) return new URL(DEFAULT_MUSIC_FALLBACK, window.location.href).href;
   try {
     const cleanUrl = url.trim();
+    if (!cleanUrl) return new URL(DEFAULT_MUSIC_FALLBACK, window.location.href).href;
     return new URL(cleanUrl, window.location.href).href;
   } catch (e) {
-    return url;
+    return new URL(DEFAULT_MUSIC_FALLBACK, window.location.href).href;
   }
 };
 
@@ -31,24 +32,54 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.8);
 
+  const fallbackSrc = getAbsoluteUrl(DEFAULT_MUSIC_FALLBACK);
   const effectiveUrl = musicUrl && !musicUrl.includes('soundhelix.com') ? musicUrl : DEFAULT_MUSIC_FALLBACK;
   const targetSrc = getAbsoluteUrl(effectiveUrl);
 
-  const attemptPlay = () => {
-    if (audioRef.current && enabled && targetSrc) {
+  const forceFallbackPlay = () => {
+    if (audioRef.current) {
+      if (decodeURIComponent(audioRef.current.src) !== decodeURIComponent(fallbackSrc)) {
+        audioRef.current.src = fallbackSrc;
+        audioRef.current.load();
+      }
       audioRef.current.volume = volume;
-      audioRef.current.muted = isMuted;
+      audioRef.current.muted = false;
       audioRef.current
         .play()
         .then(() => setIsPlaying(true))
-        .catch((err) => {
-          console.log('Autoplay blocked by browser policy, waiting for user interaction:', err);
-          setIsPlaying(false);
-        });
+        .catch((e) => console.warn('Fallback play error:', e));
     }
   };
 
-  // 1. Try playback when targetSrc changes or autoPlay is triggered
+  const handleAudioError = () => {
+    console.warn(`Audio source "${audioRef.current?.src}" failed to load. Switching to fallback "${fallbackSrc}"`);
+    forceFallbackPlay();
+  };
+
+  const attemptPlay = () => {
+    if (!audioRef.current || !enabled) return;
+    audioRef.current.volume = volume;
+    audioRef.current.muted = isMuted;
+
+    if (audioRef.current.error) {
+      forceFallbackPlay();
+      return;
+    }
+
+    audioRef.current
+      .play()
+      .then(() => setIsPlaying(true))
+      .catch((err) => {
+        if (err.name === 'NotSupportedError') {
+          forceFallbackPlay();
+        } else {
+          console.log('Autoplay blocked by browser policy, waiting for user interaction:', err);
+          setIsPlaying(false);
+        }
+      });
+  };
+
+  // 1. Instantly update audio src & load when targetSrc, enabled, or autoPlay changes
   useEffect(() => {
     if (!enabled || !targetSrc) {
       if (audioRef.current) {
@@ -60,45 +91,48 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
 
     if (audioRef.current) {
       const currentSrc = audioRef.current.src;
-      // Decode URI components to avoid endless reload loops caused by URL encoding differences
-      if (decodeURIComponent(currentSrc) !== decodeURIComponent(targetSrc)) {
+      if (!currentSrc || decodeURIComponent(currentSrc) !== decodeURIComponent(targetSrc)) {
         audioRef.current.src = targetSrc;
         audioRef.current.load();
       }
-      attemptPlay();
+      if (autoPlay) {
+        attemptPlay();
+      }
     }
   }, [targetSrc, enabled, autoPlay]);
 
-  // 2. Global user interaction listener to bypass browser autoplay restrictions
+  // 2. Gate tap / Explicit user interaction listener
   useEffect(() => {
     if (!enabled) return;
 
     const handleUserInteraction = (e?: Event) => {
-      // Ignore click/touch events originating from the music button itself to avoid race condition with togglePlay
       if (e && e.target && (e.target as HTMLElement).closest('.music-player-btn')) {
         return;
       }
-      if (audioRef.current && audioRef.current.paused) {
+      if (audioRef.current) {
         audioRef.current.volume = volume;
         audioRef.current.muted = false;
+        if (audioRef.current.error) {
+          forceFallbackPlay();
+          return;
+        }
         audioRef.current
           .play()
           .then(() => setIsPlaying(true))
-          .catch((err) => console.log('Playback attempt on interaction:', err));
+          .catch((err) => {
+            if (err.name === 'NotSupportedError') {
+              forceFallbackPlay();
+            } else {
+              console.log('Playback attempt on interaction:', err);
+            }
+          });
       }
     };
 
-    window.addEventListener('click', handleUserInteraction, { capture: true });
-    window.addEventListener('touchstart', handleUserInteraction, { capture: true });
-    window.addEventListener('keydown', handleUserInteraction, { capture: true });
     window.addEventListener('play_wedding_music', handleUserInteraction);
-
     (window as any).startGlobalWeddingMusic = handleUserInteraction;
 
     return () => {
-      window.removeEventListener('click', handleUserInteraction, { capture: true });
-      window.removeEventListener('touchstart', handleUserInteraction, { capture: true });
-      window.removeEventListener('keydown', handleUserInteraction, { capture: true });
       window.removeEventListener('play_wedding_music', handleUserInteraction);
       delete (window as any).startGlobalWeddingMusic;
     };
@@ -117,10 +151,20 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     } else {
       audioRef.current.muted = false;
       audioRef.current.volume = volume;
+      if (audioRef.current.error) {
+        forceFallbackPlay();
+        return;
+      }
       audioRef.current
         .play()
         .then(() => setIsPlaying(true))
-        .catch((err) => console.error('Error playing audio:', err));
+        .catch((err) => {
+          if (err.name === 'NotSupportedError') {
+            forceFallbackPlay();
+          } else {
+            console.error('Error playing audio:', err);
+          }
+        });
     }
   };
 
@@ -136,7 +180,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         preload="auto"
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
-        onError={(e) => console.warn('Audio playback error:', e)}
+        onError={handleAudioError}
       />
 
       {/* Floating Bottom-Right Music Button */}

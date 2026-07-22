@@ -25,7 +25,6 @@ export const uploadMedia = async (req: Request, res: Response, next: NextFunctio
       })
     );
 
-    // Public URL format: https://pub-xxxx.r2.dev/folder/filename.ext or https://account.r2.cloudflarestorage.com/bucket/key
     const publicUrl = R2_PUBLIC_DOMAIN 
       ? `${R2_PUBLIC_DOMAIN}/${objectKey}`
       : `https://${R2_BUCKET_NAME}.${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${objectKey}`;
@@ -36,14 +35,14 @@ export const uploadMedia = async (req: Request, res: Response, next: NextFunctio
       bytes: req.file.size,
       mimetype: req.file.mimetype,
     });
-  } catch (error) {
-    // Local fallback for offline/development if credentials are not configured yet
-    if (req.file) {
+  } catch (error: any) {
+    console.error('Cloudflare R2 upload error:', error?.message || error);
+    if (req.file && !req.file.mimetype.startsWith('video/')) {
       const b64 = Buffer.from(req.file.buffer).toString('base64');
       const dataURI = `data:${req.file.mimetype};base64,${b64}`;
       return sendResponse(res, 200, true, 'Media encoded locally (Cloudflare R2 fallback)', { url: dataURI });
     }
-    next(error);
+    return sendResponse(res, 500, false, `Failed to upload media to Cloudflare R2: ${error?.message || 'Upload error'}`);
   }
 };
 

@@ -27,6 +27,7 @@ interface WeddingPageProps {
   previewEvents?: WeddingEvent[];
   previewGallery?: GalleryItem[];
   isPreviewMode?: boolean;
+  isGateOpened?: boolean;
 }
 
 export const WeddingPage = ({ 
@@ -34,7 +35,8 @@ export const WeddingPage = ({
   onNavigateToAdmin,
   previewEvents,
   previewGallery,
-  isPreviewMode = false
+  isPreviewMode = false,
+  isGateOpened = true,
 }: WeddingPageProps) => {
   const [events, setEvents] = useState<WeddingEvent[]>([]);
   const [gallery, setGallery] = useState<GalleryItem[]>([]);
@@ -130,10 +132,21 @@ export const WeddingPage = ({
     year: 'numeric',
   });
 
+  const resolveFontFamily = (fontSetting?: string) => {
+    if (fontSetting === 'CustomUploadedFont' && settings.custom_font_base64) {
+      return "'CustomUploadedFont', 'Candlescript', 'Great Vibes', cursive";
+    }
+    if (settings.custom_font_base64 && (!fontSetting || fontSetting === 'Candlescript')) {
+      return "'CustomUploadedFont', 'Candlescript', 'Great Vibes', cursive";
+    }
+    if (fontSetting === 'Candlescript') {
+      return "'Candlescript', 'Great Vibes', cursive";
+    }
+    return fontSetting || "'Times New Roman', Times, serif";
+  };
+
   return (
     <div className="flex-1 bg-wedding-bg selection:bg-primary/20 selection:text-primary">
-
-
 
       {/* 1. TRADITIONAL HERO SECTION */}
       <section 
@@ -142,8 +155,19 @@ export const WeddingPage = ({
         className="wedding-card-container relative min-h-[100dvh] h-[100dvh] w-full flex items-center justify-center overflow-hidden bg-[#FEFAE0]"
       >
         {/* Full-viewport card background - image or video */}
-        {settings.card_hero_bg_type === 'video' ? (
+        {(settings.card_hero_bg_type === 'video' || (settings.card_hero_bg_url && (
+          settings.card_hero_bg_url.endsWith('.mp4') ||
+          settings.card_hero_bg_url.endsWith('.webm') ||
+          settings.card_hero_bg_url.endsWith('.mov') ||
+          settings.card_hero_bg_url.startsWith('data:video/')
+        ))) ? (
           <video
+            ref={(el) => {
+              if (el) {
+                el.muted = true;
+                el.play().catch(() => {});
+              }
+            }}
             src={settings.card_hero_bg_url || ''}
             autoPlay
             loop
@@ -159,169 +183,164 @@ export const WeddingPage = ({
           />
         )}
 
-        {/* Text Details absolute overlay */}
-        <div className="absolute inset-0 z-10 flex flex-col justify-center items-center text-center px-[8%] pt-0 pb-0 select-none">
-          <motion.span
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            style={{
-              fontFamily: settings.invite_line1_font === 'CustomUploadedFont' && settings.custom_font_base64 
-                ? 'CustomUploadedFont' 
-                : settings.invite_line1_font || "'Times New Roman', Times, serif",
-              fontSize: 'calc(10px * var(--font-scale))'
-            }}
-            className="tracking-[0.2em] font-light text-[11px] uppercase text-amber-950/65"
-          >
-            {settings.invite_line1 || 'We are cordially invited to the'}
-          </motion.span>
-          
-          <motion.span
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
-            style={{
-              fontFamily: settings.invite_line2_font === 'CustomUploadedFont' && settings.custom_font_base64 
-                ? 'CustomUploadedFont' 
-                : settings.invite_line2_font || "'Times New Roman', Times, serif",
-              fontSize: 'calc(10px * var(--font-scale))'
-            }}
-            className="tracking-[0.2em] font-light text-[11px] uppercase text-amber-950/65 mb-5"
-          >
-            {settings.invite_line2 || 'wedding ceremony of'}
-          </motion.span>
+        {/* Text Details absolute overlay - ONLY mounts and triggers animation when gate opens */}
+        <AnimatePresence>
+          {isGateOpened && (
+            <motion.div
+              key="hero-text-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.5 }}
+              className="absolute inset-0 z-10 flex flex-col justify-center items-center text-center px-[8%] pt-0 pb-0 select-none"
+            >
+              <motion.span
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                style={{
+                  fontFamily: resolveFontFamily(settings.invite_line1_font),
+                  fontSize: 'calc(10px * var(--font-scale))'
+                }}
+                className="tracking-[0.2em] font-light text-[11px] uppercase text-amber-950/65"
+              >
+                {settings.invite_line1 || 'We are cordially invited to the'}
+              </motion.span>
+              
+              <motion.span
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.4 }}
+                style={{
+                  fontFamily: resolveFontFamily(settings.invite_line2_font),
+                  fontSize: 'calc(10px * var(--font-scale))'
+                }}
+                className="tracking-[0.2em] font-light text-[11px] uppercase text-amber-950/65 mb-5"
+              >
+                {settings.invite_line2 || 'wedding ceremony of'}
+              </motion.span>
 
-          {/* Bride */}
-          <motion.h3
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1, delay: 0.6 }}
-            style={{
-              fontFamily: settings.bride_name_font === 'CustomUploadedFont' && settings.custom_font_base64 
-                ? 'CustomUploadedFont' 
-                : settings.bride_name_font === 'Candlescript' ? "'Candlescript', 'Great Vibes', cursive" : (settings.bride_name_font || "'Candlescript', 'Great Vibes', cursive"),
-              fontSize: 'calc(52px * var(--font-scale))'
-            }}
-            className="text-amber-800 font-normal leading-[1.1] mb-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-          >
-            {settings.bride_name || 'Shreya'}
-          </motion.h3>
-          
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.8 }}
-            style={{
-              fontFamily: settings.bride_parents_font === 'CustomUploadedFont' && settings.custom_font_base64 
-                ? 'CustomUploadedFont' 
-                : settings.bride_parents_font || "'Times New Roman', Times, serif",
-              fontSize: 'calc(11px * var(--font-scale))'
-            }}
-            className="font-light italic text-amber-950/60 tracking-wider text-[11px] mb-4"
-          >
-            {settings.bride_parents || 'Daughter of Mrs. Rekha Gupta & Mr. S. K. Gupta'}
-          </motion.p>
+              {/* Bride */}
+              <motion.h3
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 1, delay: 0.6 }}
+                style={{
+                  fontFamily: resolveFontFamily(settings.bride_name_font),
+                  fontSize: 'calc(52px * var(--font-scale))'
+                }}
+                className="text-amber-800 font-normal leading-[1.1] mb-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+              >
+                {settings.bride_name || 'Shreya'}
+              </motion.h3>
+              
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.8 }}
+                style={{
+                  fontFamily: resolveFontFamily(settings.bride_parents_font),
+                  fontSize: 'calc(11px * var(--font-scale))'
+                }}
+                className="font-light italic text-amber-950/60 tracking-wider text-[11px] mb-4"
+              >
+                {settings.bride_parents || 'Daughter of Mrs. Rekha Gupta & Mr. S. K. Gupta'}
+              </motion.p>
 
-          {/* with connector */}
-          <motion.span
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 1.0 }}
-            className="font-candlescript text-lg text-amber-700/80 italic mb-4"
-          >
-            with
-          </motion.span>
+              {/* with connector */}
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.8, delay: 1.0 }}
+                className="font-candlescript text-lg text-amber-700/80 italic mb-4"
+              >
+                with
+              </motion.span>
 
-          {/* Groom */}
-          <motion.h3
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 1, delay: 1.2 }}
-            style={{
-              fontFamily: settings.groom_name_font === 'CustomUploadedFont' && settings.custom_font_base64 
-                ? 'CustomUploadedFont' 
-                : settings.groom_name_font === 'Candlescript' ? "'Candlescript', 'Great Vibes', cursive" : (settings.groom_name_font || "'Candlescript', 'Great Vibes', cursive"),
-              fontSize: 'calc(52px * var(--font-scale))'
-            }}
-            className="text-amber-800 font-normal leading-[1.1] mb-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-          >
-            {settings.groom_name || 'Mukul'}
-          </motion.h3>
-          
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 1.4 }}
-            style={{
-              fontFamily: settings.groom_parents_font === 'CustomUploadedFont' && settings.custom_font_base64 
-                ? 'CustomUploadedFont' 
-                : settings.groom_parents_font || "'Times New Roman', Times, serif",
-              fontSize: 'calc(11px * var(--font-scale))'
-            }}
-            className="font-light italic text-amber-950/60 tracking-wider text-[11px] mb-5"
-          >
-            {settings.groom_parents || 'Son of Mrs. Asha Sharma & Mr. R. K. Sharma'}
-          </motion.p>
+              {/* Groom */}
+              <motion.h3
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 1, delay: 1.2 }}
+                style={{
+                  fontFamily: resolveFontFamily(settings.groom_name_font),
+                  fontSize: 'calc(52px * var(--font-scale))'
+                }}
+                className="text-amber-800 font-normal leading-[1.1] mb-1 drop-shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+              >
+                {settings.groom_name || 'Mukul'}
+              </motion.h3>
+              
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 1.4 }}
+                style={{
+                  fontFamily: resolveFontFamily(settings.groom_parents_font),
+                  fontSize: 'calc(11px * var(--font-scale))'
+                }}
+                className="font-light italic text-amber-950/60 tracking-wider text-[11px] mb-5"
+              >
+                {settings.groom_parents || 'Son of Mrs. Asha Sharma & Mr. R. K. Sharma'}
+              </motion.p>
 
-          {/* Tiny Divider */}
-          <motion.div
-            initial={{ opacity: 0, scaleX: 0 }}
-            animate={{ opacity: 1, scaleX: 1 }}
-            transition={{ duration: 0.8, delay: 1.6 }}
-            className="w-16 h-[1px] bg-amber-700/20 mb-4"
-          />
+              {/* Tiny Divider */}
+              <motion.div
+                initial={{ opacity: 0, scaleX: 0 }}
+                animate={{ opacity: 1, scaleX: 1 }}
+                transition={{ duration: 0.8, delay: 1.6 }}
+                className="w-16 h-[1px] bg-amber-700/20 mb-4"
+              />
 
-          {/* Date */}
-          <motion.p
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 1.8 }}
-            className="text-[11px] font-semibold text-amber-950 tracking-[0.25em] uppercase mb-1.5 font-times"
-          >
-            {formattedDate}
-          </motion.p>
+              {/* Date */}
+              <motion.p
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 1.8 }}
+                className="text-[11px] font-semibold text-amber-950 tracking-[0.25em] uppercase mb-1.5 font-times"
+              >
+                {formattedDate}
+              </motion.p>
 
-          {/* Venue */}
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 2.0 }}
-            style={{
-              fontFamily: settings.venue_label_font === 'CustomUploadedFont' && settings.custom_font_base64 
-                ? 'CustomUploadedFont' 
-                : settings.venue_label_font || "'Times New Roman', Times, serif",
-              fontSize: 'calc(10px * var(--font-scale))'
-            }}
-            className="tracking-[0.2em] font-light text-[10px] uppercase text-amber-950/50"
-          >
-            {settings.venue_label || 'At Venue'}
-          </motion.p>
-          
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 2.2 }}
-            className="text-[11px] font-semibold text-amber-950 tracking-[0.15em] uppercase max-w-[80%] leading-relaxed mt-1 mb-8"
-          >
-            {events.length > 0 ? events[events.length - 2]?.venue || events[0]?.venue : 'Grand Palace Resort'}
-          </motion.p>
+              {/* Venue */}
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 2.0 }}
+                style={{
+                  fontFamily: resolveFontFamily(settings.venue_label_font),
+                  fontSize: 'calc(10px * var(--font-scale))'
+                }}
+                className="tracking-[0.2em] font-light text-[10px] uppercase text-amber-950/50"
+              >
+                {settings.venue_label || 'At Venue'}
+              </motion.p>
+              
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 2.2 }}
+                className="text-[11px] font-semibold text-amber-950 tracking-[0.15em] uppercase max-w-[80%] leading-relaxed mt-1 mb-8"
+              >
+                {events.length > 0 ? events[events.length - 2]?.venue || events[0]?.venue : 'Grand Palace Resort'}
+              </motion.p>
 
-          {/* Footer Blessing */}
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1.2, delay: 2.5 }}
-            style={{
-              fontFamily: settings.blessing_note_font === 'CustomUploadedFont' && settings.custom_font_base64 
-                ? 'CustomUploadedFont' 
-                : settings.blessing_note_font === 'Candlescript' ? "'Candlescript', 'Great Vibes', cursive" : (settings.blessing_note_font || "'Candlescript', 'Great Vibes', cursive"),
-              fontSize: 'calc(14px * var(--font-scale))'
-            }}
-            className="text-amber-800/85 font-light italic  max-w-[90%] text-center text-xs tracking-wider leading-relaxed"
-          >
-            {settings.blessing_note || 'Your presence is our greatest blessing.'}
-          </motion.p>
-        </div>
+              {/* Footer Blessing */}
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1.2, delay: 2.5 }}
+                style={{
+                  fontFamily: resolveFontFamily(settings.blessing_note_font),
+                  fontSize: 'calc(14px * var(--font-scale))'
+                }}
+                className="text-amber-800/85 font-light italic  max-w-[90%] text-center text-xs tracking-wider leading-relaxed"
+              >
+                {settings.blessing_note || 'Your presence is our greatest blessing.'}
+              </motion.p>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* NEW Scratch Card block with Confetti and Fade-up Countdown */}
@@ -398,7 +417,7 @@ export const WeddingPage = ({
                               }
                             }
                           }}
-                          className="w-full bg-[#FAF6EA]/92 border border-[#D4AF37]/45 rounded-[22px] shadow-lg flex flex-col justify-center items-center text-center px-[8%] py-[10%] gap-[4%] pointer-events-none"
+                          className="w-full bg-[#FFFDF6]/95 border-2 border-[#D4AF37]/60 rounded-[22px] shadow-2xl flex flex-col justify-center items-center text-center px-[8%] py-[10%] gap-[4%] pointer-events-none"
                         >
                           {/* Event Title */}
                           <motion.div 
@@ -411,10 +430,10 @@ export const WeddingPage = ({
                             <h3 
                               style={{ 
                                 fontFamily: "'Cinzel', 'Playfair Display', serif", 
-                                color: '#B27F4C', 
+                                color: '#5C2C06', 
                                 fontSize: nameFontSize
                               }} 
-                              className="font-bold tracking-wider drop-shadow-[0_1px_1px_rgba(0,0,0,0.05)] uppercase leading-snug"
+                              className="font-black tracking-widest drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)] uppercase leading-snug"
                             >
                               {card.event_name}
                             </h3>
@@ -426,7 +445,7 @@ export const WeddingPage = ({
                               hidden: { opacity: 0, scaleX: 0 },
                               visible: { opacity: 1, scaleX: 1, transition: { duration: 0.4 } }
                             }}
-                            className="h-[1px] w-8 bg-[#D4AF37]/50" 
+                            className="h-[2px] w-12 bg-[#B8860B]" 
                           />
 
                           {/* One Line Message */}
@@ -441,10 +460,10 @@ export const WeddingPage = ({
                               <p 
                                 style={{ 
                                   fontFamily: "'Great Vibes', 'Candlescript', cursive", 
-                                  color: '#5c3a21', 
-                                  fontSize: '3.6cqw' 
+                                  color: '#3B1E08', 
+                                  fontSize: '4.2cqw' 
                                 }} 
-                                className="leading-relaxed font-light"
+                                className="leading-relaxed font-bold"
                               >
                                 {card.message}
                               </p>
@@ -462,10 +481,10 @@ export const WeddingPage = ({
                             <p 
                               style={{ 
                                 fontFamily: "'Cinzel', 'Playfair Display', serif", 
-                                color: '#5c3a21', 
-                                fontSize: '3cqw' 
+                                color: '#1F0C02', 
+                                fontSize: '3.4cqw' 
                               }} 
-                              className="tracking-wider uppercase font-semibold leading-normal whitespace-pre-line"
+                              className="tracking-widest uppercase font-black leading-normal whitespace-pre-line drop-shadow-[0_0.5px_0.5px_rgba(255,255,255,0.5)]"
                             >
                               {card.event_date}
                             </p>
@@ -482,10 +501,10 @@ export const WeddingPage = ({
                             <p 
                               style={{ 
                                 fontFamily: "'Cinzel', 'Playfair Display', serif", 
-                                color: '#B27F4C', 
-                                fontSize: '2.8cqw' 
+                                color: '#7A4215', 
+                                fontSize: '3.1cqw' 
                               }} 
-                              className="tracking-[0.1em] font-medium"
+                              className="tracking-[0.12em] font-bold"
                             >
                               {card.event_time}
                             </p>
@@ -502,10 +521,10 @@ export const WeddingPage = ({
                             <p 
                               style={{ 
                                 fontFamily: "'Cinzel', 'Playfair Display', serif", 
-                                color: '#5c3a21', 
-                                fontSize: '2.5cqw' 
+                                color: '#1F0C02', 
+                                fontSize: '3.0cqw' 
                               }} 
-                              className="tracking-wider font-light uppercase leading-snug whitespace-pre-line"
+                              className="tracking-wider font-bold uppercase leading-snug whitespace-pre-line"
                             >
                               {card.venue}
                             </p>
@@ -543,8 +562,8 @@ export const WeddingPage = ({
               <div className="mb-8 md:mb-10 w-full text-center">
                 <span className="font-poppins text-[10px] sm:text-xs uppercase tracking-[0.2em] text-primary/70 font-bold block mb-1">R S V P</span>
                 <h3 
-                  style={{ fontFamily: "'Cinzel', 'Playfair Display', serif" }}
-                  className="text-xl sm:text-2xl md:text-3xl font-bold text-[#B27F4C] tracking-wide mb-3"
+                  style={{ fontFamily: resolveFontFamily(settings.rsvp_font) }}
+                  className="text-xl sm:text-2xl md:text-3xl font-bold text-[#9E5D24] tracking-wide mb-3"
                 >
                   {settings.rsvp_family || 'Sharma Family'}
                 </h3>
@@ -554,14 +573,14 @@ export const WeddingPage = ({
               {/* Compliments Block */}
               <div className="w-full text-center">
                 <span 
-                  style={{ fontFamily: "'Great Vibes', 'Candlescript', cursive" }}
-                  className="text-xl sm:text-2xl text-[#B27F4C] block mb-2"
+                  style={{ fontFamily: resolveFontFamily(settings.compliments_font) }}
+                  className="text-2xl sm:text-3xl text-[#9E5D24] font-bold block mb-2"
                 >
                   With Best Compliments
                 </span>
                 <p 
-                  style={{ fontFamily: "'Cinzel', 'Playfair Display', serif" }}
-                  className="text-xs sm:text-sm md:text-base font-semibold text-[#5c3a21] tracking-wide leading-relaxed"
+                  style={{ fontFamily: resolveFontFamily(settings.compliments_font) }}
+                  className="text-sm sm:text-base md:text-lg font-semibold text-[#7A4B1A] tracking-wide leading-relaxed"
                 >
                   {settings.compliments_text || 'All Relatives & Friends'}
                 </p>
@@ -797,46 +816,62 @@ export const WeddingPage = ({
       </AnimatePresence>
 
       {/* 6. AWAITING YOUR PRESENCE SECTION */}
-      <section className="py-24 px-6 text-center max-w-4xl mx-auto">
-        <span className="text-primary text-5xl font-candlescript block mb-4">Awaiting Your Presence</span>
-        <p className="font-poppins text-lg italic font-light text-wedding-text/80 leading-relaxed max-w-2xl mx-auto">
+      <section className="py-20 md:py-28 px-6 text-center max-w-4xl mx-auto">
+        <span 
+          style={{ fontFamily: "'Candlescript Demo Version', 'Candlescript', 'Great Vibes', cursive" }}
+          className="text-[#9E5D24] text-4xl sm:text-5xl md:text-6xl font-bold block mb-5"
+        >
+          Awaiting Your Presence
+        </span>
+        <p 
+          style={{ fontFamily: "'Playfair Display', 'Cinzel', serif" }}
+          className="text-base sm:text-lg md:text-xl italic font-medium text-[#7A4B1A] leading-relaxed max-w-2xl mx-auto"
+        >
           "True love is a journey of two hearts starting a new adventure together. We look forward to celebrating the beginning of our forever with you."
         </p>
-        <div className="flex justify-center gap-1.5 mt-8 text-primary">
-          <Heart size={14} fill="currentColor" />
-          <Heart size={14} fill="currentColor" className="scale-125" />
-          <Heart size={14} fill="currentColor" />
+        <div className="flex justify-center gap-2 mt-8 text-[#B27F4C]">
+          <Heart size={16} fill="currentColor" />
+          <Heart size={16} fill="currentColor" className="scale-125 text-[#9E5D24]" />
+          <Heart size={16} fill="currentColor" />
         </div>
       </section>
 
       {/* 9. FOOTER */}
-      <footer className="bg-wedding-bg py-16 px-6 text-center border-t border-primary/20">
-        <div className="max-w-2xl mx-auto flex flex-col items-center gap-6">
-          <h2 className="font-candlescript text-4xl text-primary font-bold">{settings.couple_name}</h2>
-          <p className="font-poppins text-[10px] uppercase tracking-widest text-wedding-text/50">
+      <footer className="bg-[#FAF6EA]/60 py-16 px-6 text-center border-t border-primary/20">
+        <div className="max-w-2xl mx-auto flex flex-col items-center gap-5">
+          <h2 
+            style={{ fontFamily: "'Candlescript Demo Version', 'Candlescript', 'Great Vibes', cursive" }}
+            className="text-4xl sm:text-5xl text-[#9E5D24] font-bold"
+          >
+            {settings.couple_name || 'Mukul & Shreya'}
+          </h2>
+          <p 
+            style={{ fontFamily: "'Cinzel', 'Playfair Display', serif" }}
+            className="text-xs sm:text-sm uppercase tracking-[0.25em] font-semibold text-[#B27F4C]"
+          >
             {formattedDate}
           </p>
 
-          <div className="w-16 h-[1px] bg-primary/20" />
+          <div className="w-20 h-[1px] bg-[#B8860B]/40" />
 
           {/* Social icons / contact info */}
           {(settings.footer_phone || settings.footer_email) && (
-            <div className="flex items-center gap-4 text-primary">
+            <div className="flex items-center gap-4 text-[#9E5D24]">
               {settings.footer_phone && (
-                <a href={`tel:${settings.footer_phone}`} className="hover:scale-115 transition w-8 h-8 rounded-full border border-primary/20 flex items-center justify-center bg-white/40" title="Call Contact">
-                  <Phone size={14} />
+                <a href={`tel:${settings.footer_phone}`} className="hover:scale-115 transition w-9 h-9 rounded-full border border-[#D4AF37]/40 flex items-center justify-center bg-white/70 shadow-sm" title="Call Contact">
+                  <Phone size={15} />
                 </a>
               )}
               {settings.footer_email && (
-                <a href={`mailto:${settings.footer_email}`} className="hover:scale-115 transition w-8 h-8 rounded-full border border-primary/20 flex items-center justify-center bg-white/40" title="Email Contact">
-                  <Heart size={14} fill="currentColor" />
+                <a href={`mailto:${settings.footer_email}`} className="hover:scale-115 transition w-9 h-9 rounded-full border border-[#D4AF37]/40 flex items-center justify-center bg-white/70 shadow-sm" title="Email Contact">
+                  <Heart size={15} fill="currentColor" />
                 </a>
               )}
             </div>
           )}
 
-          <p className="font-poppins text-[10px] text-wedding-text/40 mt-4 leading-relaxed">
-            &copy; {new Date().getFullYear()} {settings.couple_name}. All Rights Reserved.
+          <p className="font-poppins text-[10px] text-wedding-text/60 mt-3 leading-relaxed">
+            &copy; {new Date().getFullYear()} {settings.couple_name || 'Mukul & Shreya'}. All Rights Reserved.
             {settings.footer_copyright && (
               <span className="block mt-1 opacity-75">{settings.footer_copyright}</span>
             )}
