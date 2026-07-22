@@ -106,7 +106,7 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
     if (!enabled) return;
 
     const handleUserInteraction = (e?: Event) => {
-      if (e && e.target && (e.target as HTMLElement).closest('.music-player-btn')) {
+      if (e && e.target && typeof (e.target as any).closest === 'function' && (e.target as HTMLElement).closest('.music-player-btn')) {
         return;
       }
       if (audioRef.current) {
