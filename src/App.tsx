@@ -10,6 +10,7 @@ import { CustomCursor } from './components/CustomCursor';
 import { MusicPlayer } from './components/MusicPlayer';
 import { WeddingPage } from './pages/WeddingPage';
 import { AdminPanel } from './pages/AdminPanel';
+import { SuperAdminPanel } from './pages/SuperAdminPanel';
 
 const getInitialSettings = (): WeddingSettings => {
   try {
@@ -30,6 +31,7 @@ export default function App() {
   const [startMusic, setStartMusic] = useState(false);
 
   const isAdminPath = location.pathname === '/admin';
+  const isSuperAdminPath = location.pathname === '/super-admin' || location.pathname === '/superadmin';
 
   const handleSettingsChange = useCallback((updated: WeddingSettings) => {
     setSettings(updated);
@@ -114,7 +116,7 @@ export default function App() {
 
   // Lenis smooth scroll (only on guest page after gate opens)
   useEffect(() => {
-    if (!isGateOpened || isAdminPath) return;
+    if (!isGateOpened || isAdminPath || isSuperAdminPath) return;
 
     const lenis = new Lenis({
       duration: 1.2,
@@ -130,7 +132,11 @@ export default function App() {
     requestAnimationFrame(raf);
 
     return () => lenis.destroy();
-  }, [isGateOpened, isAdminPath]);
+  }, [isGateOpened, isAdminPath, isSuperAdminPath]);
+
+  if (isSuperAdminPath) {
+    return <SuperAdminPanel onBackToGuest={handleBackToGuest} />;
+  }
 
   return (
     <>
@@ -138,12 +144,12 @@ export default function App() {
       <MusicPlayer
         musicUrl={settings.music_url || ''}
         autoPlay={startMusic}
-        enabled={!isAdminPath && settings.enable_music !== false}
-        showUI={!isAdminPath}
+        enabled={!isAdminPath && !isSuperAdminPath && settings.enable_music !== false}
+        showUI={!isAdminPath && !isSuperAdminPath}
       />
 
       {/* Floating Petals & Animated Butterflies */}
-      {settings.enable_leaves && isGateOpened && !isAdminPath && (
+      {settings.enable_leaves && isGateOpened && !isAdminPath && !isSuperAdminPath && (
         <FloatingPetals count={20} />
       )}
 
@@ -159,7 +165,7 @@ export default function App() {
       )}
 
       {/* Guest Invitation Site - Mounted so it is ready underneath */}
-      {!isAdminPath && (
+      {!isAdminPath && !isSuperAdminPath && (
         <WeddingPage
           settings={settings}
           onNavigateToAdmin={handleNavigateToAdmin}
@@ -169,7 +175,7 @@ export default function App() {
 
       {/* Welcome Gate Overlay - Fades out smoothly revealing WeddingPage underneath */}
       <AnimatePresence>
-        {!isGateOpened && !isAdminPath && (
+        {!isGateOpened && !isAdminPath && !isSuperAdminPath && (
           <WelcomeGate
             gateVideoUrl={settings.gate_video_url ?? ''}
             settings={settings}

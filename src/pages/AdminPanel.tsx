@@ -24,12 +24,18 @@ import {
   Clock,
   Play,
   Upload,
-  Heart
+  Heart,
+  ShieldCheck,
+  Globe,
+  Copy,
+  ExternalLink,
+  Share2
 } from 'lucide-react';
 import { 
   databaseService, 
   isSupabaseConfigured,
   activeSite,
+  getSiteUrls,
   DEFAULT_SETTINGS
 } from '../services/database';
 import { apiClient } from '../api/client';
@@ -493,7 +499,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
 
       {/* ─── Upload Progress Overlay ─── */}
       {uploadProgress.active && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md">
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-amber-950/25 backdrop-blur-md">
           <div className="bg-white/95 rounded-3xl shadow-2xl p-8 w-[90vw] max-w-md flex flex-col items-center gap-6 border border-primary/20">
             {/* Animated upload icon */}
             <div className="relative flex items-center justify-center">
@@ -577,6 +583,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
               Saved
             </span>
           )}
+          <a
+            href="/super-admin"
+            className="text-xs font-semibold text-[#B27F4C] hover:text-[#9E5D24] transition-colors flex items-center gap-1 cursor-pointer uppercase tracking-widest bg-amber-500/10 border border-amber-500/30 px-3 py-1.5 rounded-full"
+          >
+            <ShieldCheck size={12} /> Super Admin
+          </a>
           <button
             onClick={onBackToGuest}
             className="text-xs font-semibold hover:text-primary transition-colors flex items-center gap-1.5 cursor-pointer uppercase tracking-widest"
@@ -631,6 +643,112 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
               <h2 className="text-xl font-semibold tracking-wider uppercase text-primary border-b border-primary/10 pb-4">
                 Dashboard Overview
               </h2>
+
+              {/* Executive Website URLs Card */}
+              {(() => {
+                const siteUrls = getSiteUrls(activeSite);
+                return (
+                  <div className="bg-gradient-to-r from-amber-50/80 via-white/90 to-amber-50/80 border border-[#B27F4C]/30 rounded-2xl p-6 shadow-md space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#B27F4C]/15 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-[#B27F4C]/15 flex items-center justify-center text-[#B27F4C]">
+                          <Globe size={16} />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-[#5C2C06] text-sm uppercase tracking-wider">Your Live Invitation URLs</h3>
+                          <p className="text-[10px] text-[#7A4215]">Active Wedding Site ID: <span className="font-mono font-bold">{activeSite?.id || 'site-1'}</span></p>
+                        </div>
+                      </div>
+
+                      <a
+                        href="/super-admin"
+                        className="text-[10px] font-bold text-[#B27F4C] hover:text-[#9E5D24] uppercase tracking-wider flex items-center gap-1 bg-[#B27F4C]/10 border border-[#B27F4C]/30 px-3 py-1.5 rounded-full"
+                      >
+                        <ShieldCheck size={12} /> Manage Domain in Super Admin
+                      </a>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Free Subdomain URL */}
+                      <div className="bg-white/80 p-4 rounded-xl border border-[#B27F4C]/20 shadow-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#7A4215]">Free Subdomain URL</span>
+                          <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">Always Active</span>
+                        </div>
+                        <div className="font-mono text-xs font-bold text-[#5C2C06] truncate">
+                          {siteUrls.freeSubdomainUrl}
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(siteUrls.freeSubdomainUrl);
+                              alert('Copied free subdomain URL to clipboard!');
+                            }}
+                            className="px-2.5 py-1 text-[10px] font-semibold bg-[#B27F4C]/10 border border-[#B27F4C]/30 text-[#5C2C06] rounded-lg hover:bg-[#B27F4C]/20 transition flex items-center gap-1"
+                          >
+                            <Copy size={11} /> Copy Link
+                          </button>
+                          <a
+                            href={siteUrls.freeSubdomainUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1 font-mono"
+                          >
+                            <ExternalLink size={11} /> Open Site
+                          </a>
+                        </div>
+                      </div>
+
+                      {/* Custom Domain URL */}
+                      <div className="bg-white/80 p-4 rounded-xl border border-[#B27F4C]/20 shadow-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#7A4215]">Custom Domain URL</span>
+                          {siteUrls.hasCustomDomain ? (
+                            <span className="text-[9px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                              <ShieldCheck size={9} /> Custom SSL Active
+                            </span>
+                          ) : (
+                            <span className="text-[9px] bg-gray-100 text-gray-600 font-bold px-2 py-0.5 rounded-full">Optional</span>
+                          )}
+                        </div>
+                        <div className="font-mono text-xs font-bold text-[#5C2C06] truncate">
+                          {siteUrls.customDomainUrl || 'No custom domain attached yet'}
+                        </div>
+                        <div className="flex items-center gap-2 pt-1">
+                          {siteUrls.hasCustomDomain ? (
+                            <>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(siteUrls.customDomainUrl || '');
+                                  alert('Copied custom domain URL to clipboard!');
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-semibold bg-[#B27F4C]/10 border border-[#B27F4C]/30 text-[#5C2C06] rounded-lg hover:bg-[#B27F4C]/20 transition flex items-center gap-1"
+                              >
+                                <Copy size={11} /> Copy Link
+                              </button>
+                              <a
+                                href={siteUrls.customDomainUrl || siteUrls.freeSubdomainUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1 font-mono"
+                              >
+                                <ExternalLink size={11} /> Visit Domain
+                              </a>
+                            </>
+                          ) : (
+                            <a
+                              href="/super-admin"
+                              className="px-2.5 py-1 text-[10px] font-bold text-[#B27F4C] hover:underline flex items-center gap-1"
+                            >
+                              + Attach Custom Domain in Super Admin &rarr;
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Database Sync Banner */}
               {true && (
@@ -869,7 +987,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToGuest, onSetting
                       {/* 4. Button Opacity */}
                       <div>
                         <label className="block text-[10px] uppercase tracking-wider text-wedding-text/75 font-semibold mb-1">
-                          Black Background Opacity ({(settings.gate_btn_bg_opacity !== undefined ? settings.gate_btn_bg_opacity * 100 : 50).toFixed(0)}%)
+                          Button Background Opacity ({(settings.gate_btn_bg_opacity !== undefined ? settings.gate_btn_bg_opacity * 100 : 50).toFixed(0)}%)
                         </label>
                         <input
                           type="range"

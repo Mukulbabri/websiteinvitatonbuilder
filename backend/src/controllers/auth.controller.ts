@@ -47,28 +47,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   try {
     const { email, password } = req.body;
 
-    if (email.trim() === 'admin@wedding.com' && password === 'admin123') {
-      const adminUser = await prisma.user.upsert({
-        where: { email: 'admin@wedding.com' },
-        update: {},
-        create: {
-          email: 'admin@wedding.com',
-          name: 'Super Admin',
-          passwordHash: await bcrypt.hash('admin123', 10),
-          role: 'ADMIN',
-        },
-      });
-
-      const accessToken = generateAccessToken({ userId: adminUser.id, email: adminUser.email, role: adminUser.role });
-      const refreshToken = generateRefreshToken({ userId: adminUser.id, email: adminUser.email, role: adminUser.role });
-
-      return sendResponse(res, 200, true, 'Login successful', {
-        user: { id: adminUser.id, email: adminUser.email, name: adminUser.name, role: adminUser.role },
-        accessToken,
-        refreshToken,
-      });
-    }
-
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       return sendResponse(res, 401, false, 'Invalid credentials');

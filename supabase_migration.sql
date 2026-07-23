@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS websites (
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY, -- Maps to auth.users.id
   email TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'client', -- 'admin' (Super Admin) or 'client' (Site Owner)
+  role TEXT NOT NULL DEFAULT 'client', -- 'admin' or 'client' (Site Owner)
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

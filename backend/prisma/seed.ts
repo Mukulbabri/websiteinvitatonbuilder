@@ -13,7 +13,7 @@ async function main() {
     update: {},
     create: {
       email: 'admin@wedding.com',
-      name: 'Super Admin',
+      name: 'Site Admin',
       passwordHash: adminPassword,
       role: Role.ADMIN,
     },

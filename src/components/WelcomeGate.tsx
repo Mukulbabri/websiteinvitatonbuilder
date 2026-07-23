@@ -171,15 +171,15 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
       initial={{ opacity: 1 }}
       exit={{ opacity: 0, scale: 1.04 }}
       transition={{ duration: 1.4, ease: [0.4, 0, 0.2, 1] }}
-      className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center bg-gradient-to-br from-[#1a0c02] via-[#2c1706] to-[#0d0501] pointer-events-auto"
+      className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center bg-gradient-to-br from-[#FEFAE0] via-[#FAEDCD] to-[#F5EBE0] pointer-events-auto"
     >
       {/* Royal Backdrop Image & Ambient Overlay (Visible instantly while video buffers) */}
       <img
         src="/traditional-card.png"
         alt="Wedding Gate Poster"
-        className="absolute inset-0 w-full h-full object-cover opacity-50 mix-blend-overlay filter brightness-75 scale-105 pointer-events-none"
+        className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-multiply filter brightness-105 scale-105 pointer-events-none"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-black/70 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#FEFAE0]/80 via-[#FEFAE0]/30 to-[#FAEDCD]/60 pointer-events-none" />
 
       {/* Full Screen Video - Fades in smoothly once loaded */}
       <video
@@ -225,7 +225,7 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
                 repeat: Infinity,
                 ease: [0.4, 0, 0.2, 1],
               }}
-              className="absolute w-36 h-36 md:w-44 md:h-44 rounded-full border-2 border-amber-300/60 pointer-events-none"
+              className="absolute w-36 h-36 md:w-44 md:h-44 rounded-full border-2 border-amber-600/50 pointer-events-none"
             />
             <motion.div
               animate={{
@@ -238,7 +238,7 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
                 delay: 1.2,
                 ease: [0.4, 0, 0.2, 1],
               }}
-              className="absolute w-36 h-36 md:w-44 md:h-44 rounded-full border border-white/50 pointer-events-none"
+              className="absolute w-36 h-36 md:w-44 md:h-44 rounded-full border border-amber-800/40 pointer-events-none"
             />
 
             {/* Rotating Dashed Accent Ring - Slow & Royal */}
@@ -249,7 +249,7 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
                 repeat: Infinity,
                 ease: 'linear',
               }}
-              className="absolute w-36 h-36 md:w-44 md:h-44 rounded-full border-2 border-dashed border-amber-300/40 pointer-events-none"
+              className="absolute w-36 h-36 md:w-44 md:h-44 rounded-full border-2 border-dashed border-amber-600/50 pointer-events-none"
             />
 
             {/* Main Configurable Gate Button */}
@@ -257,11 +257,11 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
               animate={btnAnimStyle === 'none' ? {} : {
                 scale: [1, 1.07, 0.98, 1.05, 1],
                 boxShadow: [
-                  `0 0 25px ${btnBorderColor}55, 0 0 40px rgba(0, 0, 0, 0.7)`,
+                  `0 0 25px ${btnBorderColor}55, 0 10px 30px rgba(178, 127, 76, 0.25)`,
                   `0 0 50px ${btnBorderColor}AA, 0 0 55px ${btnBorderColor}55`,
-                  '0 0 20px rgba(0, 0, 0, 0.6), 0 0 25px rgba(0, 0, 0, 0.7)',
+                  '0 0 20px rgba(178, 127, 76, 0.2), 0 10px 30px rgba(178, 127, 76, 0.3)',
                   `0 0 45px ${btnBorderColor}99, 0 0 50px ${btnBorderColor}44`,
-                  `0 0 25px ${btnBorderColor}55, 0 0 40px rgba(0, 0, 0, 0.7)`,
+                  `0 0 25px ${btnBorderColor}55, 0 10px 30px rgba(178, 127, 76, 0.25)`,
                 ],
               }}
               transition={{
@@ -270,7 +270,7 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
                 ease: [0.4, 0, 0.2, 1],
               }}
               style={{
-                backgroundColor: `rgba(0, 0, 0, ${btnOpacity})`,
+                backgroundColor: `rgba(255, 253, 246, ${btnOpacity})`,
                 borderColor: btnBorderColor,
               }}
               className={`${
@@ -279,10 +279,10 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
                   : btnShape === 'square'
                   ? 'w-32 h-32 md:w-40 md:h-40 rounded-3xl'
                   : 'w-32 h-32 md:w-40 md:h-40 rounded-full'
-              } border-2 backdrop-blur-md flex flex-col items-center justify-center p-4 transition-colors duration-500 hover:bg-black/75 active:scale-95 group relative overflow-hidden`}
+              } border-2 backdrop-blur-md flex flex-col items-center justify-center p-4 transition-colors duration-500 hover:bg-white/95 active:scale-95 group relative overflow-hidden`}
             >
               {/* Inner Radial Shimmer Glow */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-amber-400/25 via-transparent to-transparent opacity-40 group-hover:opacity-80 transition-opacity duration-500" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-amber-200/40 via-transparent to-transparent opacity-50 group-hover:opacity-90 transition-opacity duration-500" />
 
               {/* Dynamic Text with Smooth Zoom Pulse */}
               <motion.span
@@ -292,12 +292,12 @@ export const WelcomeGate: React.FC<WelcomeGateProps> = ({
                   repeat: Infinity,
                   ease: [0.4, 0, 0.2, 1],
                 }}
-                className="relative z-10 text-white font-serif font-bold text-xs md:text-sm tracking-[0.2em] uppercase text-center w-full block group-hover:text-amber-200 transition-colors drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]"
+                className="relative z-10 text-[#5C2C06] font-serif font-bold text-xs md:text-sm tracking-[0.2em] uppercase text-center w-full block group-hover:text-amber-900 transition-colors drop-shadow-[0_1px_2px_rgba(255,255,255,0.8)]"
               >
                 {btnText}
               </motion.span>
               {btnSubtitle && (
-                <span className="relative z-10 text-[9px] md:text-[10px] text-amber-200/90 tracking-widest uppercase mt-1 font-light text-center w-full block group-hover:scale-105 transition-transform duration-300">
+                <span className="relative z-10 text-[9px] md:text-[10px] text-[#7A4215] tracking-widest uppercase mt-1 font-semibold text-center w-full block group-hover:scale-105 transition-transform duration-300">
                   {btnSubtitle}
                 </span>
               )}

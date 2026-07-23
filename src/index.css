@@ -4,7 +4,8 @@
 
 @font-face {
   font-family: 'Candlescript';
-  src: local('Candlescript Demo Version'), local('Candlescript'), local('Great Vibes'), url('https://fonts.gstatic.com/s/greatvibes/v18/RWmMoKWR9v4ksMfaWd_JN9XBIA.woff2') format('woff2');
+  src: local('Candlescript Demo Version'), local('Candlescript'),
+       url('https://fonts.cdnfonts.com/s/14543/Candlescript-Demo-Version.woff') format('woff');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -23,12 +24,12 @@
 
 
 :root {
-  --theme-primary: #D4A373;
+  --theme-primary: #B27F4C;
   --theme-secondary: #FAEDCD;
   --theme-background: #FEFAE0;
-  --theme-text: #3A3A3A;
+  --theme-text: #4A2E18;
   
-  --font-heading: 'Candlescript', 'Great Vibes', 'Playfair Display', serif;
+  --font-heading: 'Candlescript Demo Version', 'Candlescript', 'Great Vibes', cursive;
   --font-body: 'Poppins', sans-serif;
   
   --radius-wedding: 20px;
@@ -49,7 +50,7 @@
 /* Base resets & setups */
 html {
   scroll-behavior: smooth;
-  background-color: var(--theme-background);
+  background-color: #FEFAE0 !important;
   color: var(--theme-text);
   font-family: var(--font-body);
 }
@@ -58,12 +59,14 @@ body {
   overflow-x: hidden;
   margin: 0;
   padding: 0;
+  background-color: #FEFAE0 !important;
 }
 
 #root {
   min-height: 100svh;
   display: flex;
   flex-direction: column;
+  background-color: #FEFAE0 !important;
 }
 
 /* Custom Scrollbar */
@@ -82,9 +85,6 @@ body {
 }
 
 /* Premium Layout classes */
-.font-candlescript {
-  font-family: var(--font-heading);
-}
 
 .font-poppins {
   font-family: var(--font-body);

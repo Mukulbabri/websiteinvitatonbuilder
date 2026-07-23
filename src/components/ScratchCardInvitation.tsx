@@ -210,7 +210,7 @@ export const ScratchCardInvitation: React.FC<ScratchCardInvitationProps> = ({ se
   };
 
   return (
-    <section className="py-12 bg-gradient-to-b from-[#FEFAE0] to-[#FAEDCD]/40 px-6 relative overflow-hidden flex flex-col items-center w-full">
+    <section className="py-12 bg-gradient-to-b from-[#FEFAE0] to-[#FAF6EA] px-6 relative overflow-hidden flex flex-col items-center w-full">
       {/* Decorative corners */}
       <div className="absolute top-0 left-0 w-32 h-32 bg-[url('/traditional-card-corner.png')] bg-no-repeat bg-contain opacity-10 pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-32 h-32 bg-[url('/traditional-card-corner.png')] bg-no-repeat bg-contain rotate-180 opacity-10 pointer-events-none" />

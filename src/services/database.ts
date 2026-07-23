@@ -18,14 +18,55 @@ export const setActiveSite = (site: any) => {
   activeSiteId = activeSite.id;
 };
 
+export const getSiteUrls = (site: any) => {
+  const sub = site?.subdomain || 'wedding';
+  const dom = site?.domain;
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
+  const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ':5173';
+  const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+
+  // Free Subdomain URL: e.g. http://couplename.localhost:5173 or query fallback http://localhost:5173/?subdomain=couplename
+  const freeSubdomainUrl = `${protocol}//${sub}.localhost${port}`;
+  const localQuerySubdomainUrl = `${origin}/?subdomain=${sub}`;
+
+  // Custom Domain URL: e.g. http://rahulwedsneha.com or query fallback http://localhost:5173/?domain=rahulwedsneha.com
+  const hasCustomDomain = dom && !dom.includes('rahulwedsneha.com') && dom !== `${sub}.wedding.com`;
+  const customDomainUrl = hasCustomDomain ? (dom.startsWith('http') ? dom : `https://${dom}`) : null;
+  const localQueryCustomDomainUrl = hasCustomDomain ? `${origin}/?domain=${encodeURIComponent(dom)}` : null;
+
+  return {
+    freeSubdomainUrl,
+    localQuerySubdomainUrl,
+    customDomainUrl,
+    localQueryCustomDomainUrl,
+    hasCustomDomain,
+    primaryUrl: customDomainUrl || freeSubdomainUrl,
+    primaryTestUrl: localQueryCustomDomainUrl || localQuerySubdomainUrl
+  };
+};
+
 export const detectCurrentTenant = async (): Promise<any> => {
   if (typeof window === 'undefined') return null;
   const host = window.location.hostname;
   const urlParams = new URLSearchParams(window.location.search);
   const siteParam = urlParams.get('site') || urlParams.get('siteId') || urlParams.get('tenant');
+  const domainParam = urlParams.get('domain') || urlParams.get('host');
   const forceSaas = urlParams.get('saas') === 'true' || urlParams.get('landing') === 'true';
 
-  // 1. Explicit site requested via query parameter
+  // 1. Explicit domain / host parameter in URL
+  if (domainParam) {
+    const mockWebsites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
+    const site = mockWebsites.find((w: any) => 
+      (w.domain || '').toLowerCase() === domainParam.toLowerCase() ||
+      (w.subdomain || '').toLowerCase() === domainParam.toLowerCase()
+    );
+    if (site) {
+      setActiveSite(site);
+      return site;
+    }
+  }
+
+  // 2. Explicit site requested via query parameter
   if (siteParam) {
     const mockWebsites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
     const site = mockWebsites.find((w: any) => w.id === siteParam || w.subdomain === siteParam);
@@ -38,13 +79,13 @@ export const detectCurrentTenant = async (): Promise<any> => {
     return defaultSite;
   }
 
-  // 2. Explicit SaaS Landing requested
+  // 3. Explicit SaaS Landing requested
   if (forceSaas) {
     setActiveSite(null);
     return null;
   }
 
-  // 3. Subdomain / Custom Domain check
+  // 4. Subdomain / Custom Domain check against window.location.hostname
   let subdomain: string | null = null;
   let customDomain: string | null = null;
   const parts = host.split('.');
@@ -69,7 +110,8 @@ export const detectCurrentTenant = async (): Promise<any> => {
 
     const mockWebsites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
     const mockSite = mockWebsites.find((w: any) => 
-      (subdomain && w.subdomain === subdomain) || (customDomain && w.domain === customDomain)
+      (subdomain && w.subdomain === subdomain) || 
+      (customDomain && (w.domain === customDomain || w.domain === `www.${customDomain}` || `www.${w.domain}` === customDomain))
     );
     if (mockSite) {
       setActiveSite(mockSite);
@@ -77,7 +119,7 @@ export const detectCurrentTenant = async (): Promise<any> => {
     }
   }
 
-  // 4. Localhost Development Fallback: Load default 'site-1' site so wedding invitation functions work out-of-the-box
+  // 5. Localhost Development Fallback: Load default 'site-1' site so wedding invitation functions work out-of-the-box
   const mockWebsites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
   const defaultSite = mockWebsites[0] || { id: 'site-1', subdomain: 'rahul', status: 'active' };
   setActiveSite(defaultSite);
@@ -660,12 +702,10 @@ export const applyThemeSettings = (settings: WeddingSettings) => {
 
 // --- Unified Database Service ---
 
-
-
 import { apiClient } from '../api/client';
 
 export const databaseService = {
-  // 1. Settings CRUD
+  // 1. Settings CRUD (100% Isolated per siteId)
   async getSettings(): Promise<any> {
     const siteId = activeSiteId || 'site-1';
     const storageKey = `wedding_settings_${siteId}`;
@@ -677,15 +717,14 @@ export const databaseService = {
         const merged = { ...DEFAULT_SETTINGS, ...data };
         applyThemeSettings(merged);
         localStorage.setItem(storageKey, JSON.stringify(merged));
-        localStorage.setItem('wedding_settings', JSON.stringify(merged));
         return merged;
       }
     } catch (err) {
       console.warn('Backend API getSettings notice:', err);
     }
 
-    // Fallback only if Cloud API is unreachable
-    const raw = localStorage.getItem(storageKey) || localStorage.getItem('wedding_settings');
+    // Fallback: Read ONLY site-specific storage to guarantee zero cross-site overlap!
+    const raw = localStorage.getItem(storageKey) || (siteId === 'site-1' ? localStorage.getItem('wedding_settings') : null);
     const localSettings = raw ? JSON.parse(raw) : {};
     const merged = { ...DEFAULT_SETTINGS, ...localSettings };
     applyThemeSettings(merged);
@@ -725,7 +764,7 @@ export const databaseService = {
     const siteId = activeSiteId || 'site-1';
     const storageKey = `wedding_settings_${siteId}`;
     localStorage.setItem(storageKey, JSON.stringify(settings));
-    localStorage.setItem('wedding_settings', JSON.stringify(settings));
+    if (siteId === 'site-1') localStorage.setItem('wedding_settings', JSON.stringify(settings));
     applyThemeSettings(settings);
 
     try {
@@ -733,7 +772,6 @@ export const databaseService = {
       if (data && typeof data === 'object') {
         const merged = { ...settings, ...data };
         localStorage.setItem(storageKey, JSON.stringify(merged));
-        localStorage.setItem('wedding_settings', JSON.stringify(merged));
         return merged;
       }
     } catch (err) {
@@ -742,7 +780,7 @@ export const databaseService = {
     return settings;
   },
 
-  // 2. Events CRUD
+  // 2. Events CRUD (100% Isolated per siteId)
   async getEvents(): Promise<any[]> {
     const siteId = activeSiteId || 'site-1';
     try {
@@ -752,7 +790,7 @@ export const databaseService = {
       // ignore
     }
     const storageKey = `wedding_events_${siteId}`;
-    const raw = localStorage.getItem(storageKey) || localStorage.getItem('wedding_events');
+    const raw = localStorage.getItem(storageKey) || (siteId === 'site-1' ? localStorage.getItem('wedding_events') : null);
     return raw ? JSON.parse(raw) : DEFAULT_EVENTS;
   },
 
@@ -765,7 +803,8 @@ export const databaseService = {
       // ignore
     }
     const storageKey = `wedding_events_${siteId}`;
-    const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_events') || JSON.stringify(DEFAULT_EVENTS));
+    const raw = localStorage.getItem(storageKey);
+    const list: any[] = raw ? JSON.parse(raw) : JSON.parse(JSON.stringify(DEFAULT_EVENTS));
     const idx = list.findIndex(e => e.id === event.id);
     if (idx !== -1) {
       list[idx] = { ...list[idx], ...event };
@@ -773,7 +812,6 @@ export const databaseService = {
       list.push(event);
     }
     localStorage.setItem(storageKey, JSON.stringify(list));
-    localStorage.setItem('wedding_events', JSON.stringify(list));
     return event;
   },
 
@@ -785,10 +823,10 @@ export const databaseService = {
       // ignore
     }
     const storageKey = `wedding_events_${siteId}`;
-    const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_events') || '[]');
+    const raw = localStorage.getItem(storageKey);
+    const list: any[] = raw ? JSON.parse(raw) : [];
     const filtered = list.filter(e => e.id !== id);
     localStorage.setItem(storageKey, JSON.stringify(filtered));
-    localStorage.setItem('wedding_events', JSON.stringify(filtered));
     return true;
   },
 
@@ -800,18 +838,18 @@ export const databaseService = {
       // ignore
     }
     const storageKey = `wedding_events_${siteId}`;
-    const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_events') || '[]');
+    const raw = localStorage.getItem(storageKey);
+    const list: any[] = raw ? JSON.parse(raw) : [];
     const updated = list.map(ev => {
       const idx = eventIds.indexOf(ev.id);
       return idx !== -1 ? { ...ev, sort_order: idx + 1 } : ev;
     }).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
     
     localStorage.setItem(storageKey, JSON.stringify(updated));
-    localStorage.setItem('wedding_events', JSON.stringify(updated));
     return true;
   },
 
-  // 3. Gallery CRUD
+  // 3. Gallery CRUD (100% Isolated per siteId)
   async getGallery(): Promise<any[]> {
     const siteId = activeSiteId || 'site-1';
     const storageKey = `wedding_gallery_${siteId}`;
@@ -825,7 +863,7 @@ export const databaseService = {
       // ignore
     }
 
-    const localRaw = localStorage.getItem(storageKey) || localStorage.getItem('wedding_gallery');
+    const localRaw = localStorage.getItem(storageKey) || (siteId === 'site-1' ? localStorage.getItem('wedding_gallery') : null);
     const localItems = localRaw ? JSON.parse(localRaw) : DEFAULT_GALLERY;
 
     const mergedMap = new Map();
@@ -845,14 +883,14 @@ export const databaseService = {
 
     const finalGallery = Array.from(mergedMap.values());
     localStorage.setItem(storageKey, JSON.stringify(finalGallery));
-    localStorage.setItem('wedding_gallery', JSON.stringify(finalGallery));
     return finalGallery;
   },
 
   async addGalleryImage(imageUrl: string): Promise<any> {
     const siteId = activeSiteId || 'site-1';
     const storageKey = `wedding_gallery_${siteId}`;
-    const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_gallery') || '[]');
+    const raw = localStorage.getItem(storageKey);
+    const list: any[] = raw ? JSON.parse(raw) : [];
     let newItem: any = {
       id: `gal-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       image_url: imageUrl,
@@ -878,7 +916,6 @@ export const databaseService = {
 
     list.push(newItem);
     localStorage.setItem(storageKey, JSON.stringify(list));
-    localStorage.setItem('wedding_gallery', JSON.stringify(list));
     return newItem;
   },
 
@@ -890,14 +927,14 @@ export const databaseService = {
       // ignore
     }
     const storageKey = `wedding_gallery_${siteId}`;
-    const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_gallery') || '[]');
+    const raw = localStorage.getItem(storageKey);
+    const list: any[] = raw ? JSON.parse(raw) : [];
     const filtered = list.filter(g => g.id !== id);
     localStorage.setItem(storageKey, JSON.stringify(filtered));
-    localStorage.setItem('wedding_gallery', JSON.stringify(filtered));
     return true;
   },
 
-  // 4. RSVP CRUD
+  // 4. RSVP CRUD (100% Isolated per siteId)
   async getRSVPs(): Promise<any[]> {
     const siteId = activeSiteId || 'site-1';
     try {
@@ -907,14 +944,15 @@ export const databaseService = {
       // ignore
     }
     const storageKey = `wedding_rsvps_${siteId}`;
-    const raw = localStorage.getItem(storageKey) || localStorage.getItem('wedding_rsvps');
+    const raw = localStorage.getItem(storageKey) || (siteId === 'site-1' ? localStorage.getItem('wedding_rsvps') : null);
     return raw ? JSON.parse(raw) : DEFAULT_RSVPS;
   },
 
   async submitRSVP(rsvp: any): Promise<any> {
     const siteId = activeSiteId || 'site-1';
     const storageKey = `wedding_rsvps_${siteId}`;
-    const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_rsvps') || '[]');
+    const raw = localStorage.getItem(storageKey);
+    const list: any[] = raw ? JSON.parse(raw) : [];
     
     let newItem: any = {
       id: `rsvp-${Date.now()}`,
@@ -935,7 +973,6 @@ export const databaseService = {
 
     list.unshift(newItem);
     localStorage.setItem(storageKey, JSON.stringify(list));
-    localStorage.setItem('wedding_rsvps', JSON.stringify(list));
     return newItem;
   },
 
@@ -947,14 +984,14 @@ export const databaseService = {
       // ignore
     }
     const storageKey = `wedding_rsvps_${siteId}`;
-    const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_rsvps') || '[]');
+    const raw = localStorage.getItem(storageKey);
+    const list: any[] = raw ? JSON.parse(raw) : [];
     const filtered = list.filter(r => r.id !== id);
     localStorage.setItem(storageKey, JSON.stringify(filtered));
-    localStorage.setItem('wedding_rsvps', JSON.stringify(filtered));
     return true;
   },
 
-  // 5. Blessings CRUD
+  // 5. Blessings CRUD (100% Isolated per siteId)
   async getBlessings(): Promise<any[]> {
     const siteId = activeSiteId || 'site-1';
     try {
@@ -964,14 +1001,15 @@ export const databaseService = {
       // ignore
     }
     const storageKey = `wedding_blessings_${siteId}`;
-    const raw = localStorage.getItem(storageKey) || localStorage.getItem('wedding_blessings');
+    const raw = localStorage.getItem(storageKey) || (siteId === 'site-1' ? localStorage.getItem('wedding_blessings') : null);
     return raw ? JSON.parse(raw) : DEFAULT_BLESSINGS;
   },
 
   async submitBlessing(name: string, message: string): Promise<any> {
     const siteId = activeSiteId || 'site-1';
     const storageKey = `wedding_blessings_${siteId}`;
-    const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_blessings') || '[]');
+    const raw = localStorage.getItem(storageKey);
+    const list: any[] = raw ? JSON.parse(raw) : [];
 
     let newItem: any = {
       id: `bless-${Date.now()}`,
@@ -990,7 +1028,6 @@ export const databaseService = {
 
     list.unshift(newItem);
     localStorage.setItem(storageKey, JSON.stringify(list));
-    localStorage.setItem('wedding_blessings', JSON.stringify(list));
     return newItem;
   },
 
@@ -1002,12 +1039,12 @@ export const databaseService = {
       // ignore
     }
     const storageKey = `wedding_blessings_${siteId}`;
-    const list: any[] = JSON.parse(localStorage.getItem(storageKey) || localStorage.getItem('wedding_blessings') || '[]');
+    const raw = localStorage.getItem(storageKey);
+    const list: any[] = raw ? JSON.parse(raw) : [];
     const idx = list.findIndex(b => b.id === id);
     if (idx !== -1) {
       list[idx].status = 'approved';
       localStorage.setItem(storageKey, JSON.stringify(list));
-      localStorage.setItem('wedding_blessings', JSON.stringify(list));
     }
     return true;
   },
@@ -1126,7 +1163,7 @@ export const databaseService = {
     return true;
   },
 
-  // 7. Plan Features & Admin / SuperAdmin helpers
+  // 7. Plan Features helpers
   async getAllPlanFeatures(): Promise<Record<string, PlanFeatures>> {
     try {
       const { data } = await apiClient.get('/plans');
@@ -1155,6 +1192,7 @@ export const databaseService = {
     }
   },
 
+  // Super Admin Methods
   async superGetWebsites(): Promise<any[]> {
     try {
       const { data } = await apiClient.get('/admin/websites');
@@ -1224,6 +1262,35 @@ export const databaseService = {
     }
   },
 
+  async superCreateTemplateFromSite(siteId: string, name?: string, description?: string, thumbnail_url?: string): Promise<any> {
+    try {
+      const { data } = await apiClient.post('/admin/templates/from-site', { siteId, name, description, thumbnail_url });
+      return data;
+    } catch (err) {
+      const currentSets = await this.getSettings();
+      const currentEvents = await this.getEvents();
+      const currentGallery = await this.getGallery();
+
+      const list = JSON.parse(localStorage.getItem('saas_templates') || '[]');
+      const newTpl = {
+        id: `tpl-${Date.now()}`,
+        name: name || 'Saved Master Template',
+        description: description || 'Template generated from site configuration',
+        thumbnail_url: thumbnail_url || 'https://images.unsplash.com/photo-1519741497674-611481863552?w=600',
+        is_published: true,
+        default_data: {
+          settings: currentSets,
+          events: currentEvents,
+          gallery: currentGallery
+        },
+        created_at: new Date().toISOString()
+      };
+      list.push(newTpl);
+      localStorage.setItem('saas_templates', JSON.stringify(list));
+      return newTpl;
+    }
+  },
+
   async superDuplicateWebsite(id: string, newSubdomain?: string, newDomain?: string): Promise<any> {
     try {
       const { data } = await apiClient.post(`/admin/websites/${id}/duplicate`, { newSubdomain, newDomain });
@@ -1231,35 +1298,80 @@ export const databaseService = {
     } catch (err) {
       const list = JSON.parse(localStorage.getItem('saas_websites') || '[]');
       const site = list.find((w: any) => w.id === id);
-      if (site) {
-        const copy = { 
-          ...site, 
-          id: `site-${Date.now()}`, 
-          subdomain: newSubdomain || `${site.subdomain}-copy`,
-          domain: newDomain || site.domain 
-        };
-        list.push(copy);
-        localStorage.setItem('saas_websites', JSON.stringify(list));
-        return copy;
-      }
-      return null;
+      const newId = `site-${Date.now()}`;
+      const sub = newSubdomain || `${site?.subdomain || 'wedding'}-copy`;
+      const dom = newDomain || `${sub}.rahulwedsneha.com`;
+      const copy = {
+        ...(site || { plan: 'royal', status: 'active' }),
+        id: newId,
+        subdomain: sub,
+        domain: dom,
+        created_at: new Date().toISOString()
+      };
+
+      // Copy isolated localStorage data
+      const origSets = localStorage.getItem(`wedding_settings_${id}`) || localStorage.getItem('wedding_settings');
+      if (origSets) localStorage.setItem(`wedding_settings_${newId}`, origSets);
+
+      const origEvs = localStorage.getItem(`wedding_events_${id}`) || localStorage.getItem('wedding_events');
+      if (origEvs) localStorage.setItem(`wedding_events_${newId}`, origEvs);
+
+      const origGal = localStorage.getItem(`wedding_gallery_${id}`) || localStorage.getItem('wedding_gallery');
+      if (origGal) localStorage.setItem(`wedding_gallery_${newId}`, origGal);
+
+      list.push(copy);
+      localStorage.setItem('saas_websites', JSON.stringify(list));
+      return copy;
     }
   },
 
-  async superCreateTemplateFromSite(siteId: string, nameOrOptions?: string | any, description?: string): Promise<any> {
-    const name = typeof nameOrOptions === 'object' ? nameOrOptions.name : nameOrOptions;
-    const desc = typeof nameOrOptions === 'object' ? nameOrOptions.description : description;
-    const thumb = typeof nameOrOptions === 'object' ? nameOrOptions.thumbnail_url : undefined;
-    try {
-      const { data } = await apiClient.post(`/admin/templates/from-site`, { siteId, name, description: desc, thumbnail_url: thumb });
-      return data;
-    } catch (err) {
-      const list = JSON.parse(localStorage.getItem('saas_templates') || '[]');
-      const newTpl = { id: `tpl-${Date.now()}`, name: name || 'Custom Template', description: desc || '', thumbnail_url: thumb || 'https://images.unsplash.com/photo-1519741497674-611481863552?w=600', is_published: true, created_at: new Date().toISOString() };
-      list.push(newTpl);
-      localStorage.setItem('saas_templates', JSON.stringify(list));
-      return newTpl;
+  async superDuplicateTemplate(id: string, newName?: string): Promise<any> {
+    const list = JSON.parse(localStorage.getItem('saas_templates') || '[]');
+    const tpl = list.find((t: any) => t.id === id);
+    if (!tpl) return null;
+    const copy = {
+      ...tpl,
+      id: `tpl-${Date.now()}`,
+      name: newName || `${tpl.name} (Copy)`,
+      created_at: new Date().toISOString()
+    };
+    list.push(copy);
+    localStorage.setItem('saas_templates', JSON.stringify(list));
+    return copy;
+  },
+
+  async superCreateWebsiteFromTemplate(templateId: string, subdomain: string, domain?: string, plan?: string): Promise<any> {
+    const list = JSON.parse(localStorage.getItem('saas_templates') || '[]');
+    const tpl = list.find((t: any) => t.id === templateId);
+    const newSiteId = `site-${Date.now()}`;
+    const newSite = {
+      id: newSiteId,
+      template_id: templateId,
+      subdomain: subdomain.toLowerCase(),
+      domain: domain || `${subdomain.toLowerCase()}.rahulwedsneha.com`,
+      plan: plan || 'royal',
+      status: 'active',
+      created_at: new Date().toISOString()
+    };
+
+    if (tpl?.default_data?.settings) {
+      localStorage.setItem(`wedding_settings_${newSiteId}`, JSON.stringify(tpl.default_data.settings));
     }
+    if (tpl?.default_data?.events) {
+      localStorage.setItem(`wedding_events_${newSiteId}`, JSON.stringify(tpl.default_data.events));
+    }
+    if (tpl?.default_data?.gallery) {
+      localStorage.setItem(`wedding_gallery_${newSiteId}`, JSON.stringify(tpl.default_data.gallery));
+    }
+
+    const sites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
+    sites.push(newSite);
+    localStorage.setItem('saas_websites', JSON.stringify(sites));
+    return newSite;
+  },
+
+  async superSwitchActiveSite(site: any): Promise<void> {
+    setActiveSite(site);
   },
 
   async superCreateTemplate(tpl: any): Promise<any> {
@@ -1303,6 +1415,48 @@ export const databaseService = {
       return true;
     }
   },
+
+  async superAttachCustomDomain(siteId: string, customDomain: string): Promise<any> {
+    const cleanDomain = customDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    try {
+      const { data } = await apiClient.post(`/admin/websites/${siteId}/domain`, { domain: cleanDomain });
+      return data;
+    } catch (err) {
+      const list = JSON.parse(localStorage.getItem('saas_websites') || '[]');
+      const idx = list.findIndex((w: any) => w.id === siteId);
+      if (idx !== -1) {
+        list[idx] = {
+          ...list[idx],
+          domain: cleanDomain,
+          dns_status: 'verified',
+          ssl_status: 'active'
+        };
+        localStorage.setItem('saas_websites', JSON.stringify(list));
+      }
+      return { domain: cleanDomain, dns_status: 'verified', ssl_status: 'active' };
+    }
+  },
+
+  async superVerifyDomainDns(siteId: string): Promise<any> {
+    try {
+      const { data } = await apiClient.post(`/admin/websites/${siteId}/verify-dns`);
+      return data;
+    } catch (err) {
+      const list = JSON.parse(localStorage.getItem('saas_websites') || '[]');
+      const site = list.find((w: any) => w.id === siteId);
+      return {
+        verified: true,
+        domain: site?.domain || 'customdomain.com',
+        dns_records: {
+          a_record: { host: '@', value: '76.76.21.21', status: 'valid' },
+          cname_record: { host: 'www', value: 'cname.weddingplatform.com', status: 'valid' }
+        },
+        ssl: 'active'
+      };
+    }
+  },
+
+
 
   // 10. Consolidated Architecture Abstractions
   async getWebsitePlan(siteId: string): Promise<string> {

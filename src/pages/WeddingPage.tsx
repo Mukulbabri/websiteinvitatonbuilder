@@ -146,7 +146,7 @@ export const WeddingPage = ({
   };
 
   return (
-    <div className="flex-1 bg-wedding-bg selection:bg-primary/20 selection:text-primary">
+    <div className="flex-1 bg-[#FEFAE0] text-wedding-text selection:bg-primary/20 selection:text-primary">
 
       {/* 1. TRADITIONAL HERO SECTION */}
       <section 
@@ -347,7 +347,7 @@ export const WeddingPage = ({
       <ScratchCardInvitation settings={settings} />
 
       {/* 2. PREMIUM EVENT INVITATIONS SECTION */}
-      <section id="event-cards" className="py-20 bg-gradient-to-b from-[#FAEDCD]/20 to-[#FEFAE0] px-4 md:px-6 relative overflow-hidden w-full">
+      <section id="event-cards" className="py-20 bg-gradient-to-b from-[#FAF6EA] via-[#FFFDF6] to-[#FAF6EA] px-4 md:px-6 relative overflow-hidden w-full border-t border-primary/10">
         {/* Decorative corners */}
         <div className="absolute top-0 left-0 w-32 h-32 bg-[url('/traditional-card-corner.png')] bg-no-repeat bg-contain opacity-5 pointer-events-none" />
         <div className="absolute bottom-0 right-0 w-32 h-32 bg-[url('/traditional-card-corner.png')] bg-no-repeat bg-contain rotate-180 opacity-5 pointer-events-none" />
@@ -543,7 +543,7 @@ export const WeddingPage = ({
       </section>
 
       {/* 6.5 TRADITIONAL RSVP, COMPLIMENTS & VENUE MAP */}
-      <section id="venue-map" className="py-12 md:py-20 bg-[#FAEDCD]/10 px-4 sm:px-6 border-t border-primary/10 w-full overflow-hidden">
+      <section id="venue-map" className="py-12 md:py-20 bg-[#FFFDF6] px-4 sm:px-6 border-t border-primary/15 w-full overflow-hidden">
         <div className="max-w-5xl mx-auto w-full flex flex-col items-center">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-stretch w-full max-w-lg md:max-w-none mx-auto justify-center">
             {/* Left Column: RSVP & Compliments card */}
@@ -624,7 +624,7 @@ export const WeddingPage = ({
       </section>
 
       {/* 6.6 WHATSAPP BLESSINGS SECTION */}
-      <section id="whatsapp-blessings" className="py-20 bg-[#FAF6EA]/60 px-6 border-t border-b border-primary/10">
+      <section id="whatsapp-blessings" className="py-20 bg-[#FAF6EA] px-6 border-t border-b border-primary/15">
         <div className="max-w-xl mx-auto text-center">
           <span 
             style={{ fontFamily: "'Great Vibes', 'Candlescript', cursive" }}
@@ -689,7 +689,7 @@ export const WeddingPage = ({
 
 
       {/* 5. COUPLE GALLERY SECTION */}
-      <section id="gallery" className="py-20 bg-secondary/15">
+      <section id="gallery" className="py-20 bg-[#FFFDF6] border-b border-primary/15">
         <div className="max-w-5xl mx-auto px-6">
           <div className="text-center mb-12">
             <span className="text-primary text-2xl font-candlescript font-bold block mb-2">Memories</span>
@@ -816,7 +816,7 @@ export const WeddingPage = ({
       </AnimatePresence>
 
       {/* 6. AWAITING YOUR PRESENCE SECTION */}
-      <section className="py-20 md:py-28 px-6 text-center max-w-4xl mx-auto">
+      <section className="py-20 md:py-28 px-6 text-center max-w-4xl mx-auto bg-[#FEFAE0] rounded-3xl my-8 border border-primary/15 shadow-sm">
         <span 
           style={{ fontFamily: "'Candlescript Demo Version', 'Candlescript', 'Great Vibes', cursive" }}
           className="text-[#9E5D24] text-4xl sm:text-5xl md:text-6xl font-bold block mb-5"
@@ -837,7 +837,7 @@ export const WeddingPage = ({
       </section>
 
       {/* 9. FOOTER */}
-      <footer className="bg-[#FAF6EA]/60 py-16 px-6 text-center border-t border-primary/20">
+      <footer className="bg-[#FAF6EA] py-16 px-6 text-center border-t border-primary/20">
         <div className="max-w-2xl mx-auto flex flex-col items-center gap-5">
           <h2 
             style={{ fontFamily: "'Candlescript Demo Version', 'Candlescript', 'Great Vibes', cursive" }}

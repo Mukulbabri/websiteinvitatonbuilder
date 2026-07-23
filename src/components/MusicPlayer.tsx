@@ -188,18 +188,18 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = ({
         <div className="fixed bottom-6 right-6 z-50 flex items-center">
           <button
             onClick={togglePlay}
-            className={`music-player-btn w-14 h-14 rounded-full border-2 border-amber-300/70 shadow-[0_4px_30px_rgba(212,175,55,0.45)] select-none bg-black/85 backdrop-blur-md text-amber-200 flex flex-col items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer relative overflow-hidden ${
-              isPlaying ? 'ring-2 ring-amber-400/60 shadow-[0_0_25px_rgba(251,191,36,0.6)]' : ''
+            className={`music-player-btn w-14 h-14 rounded-full border-2 border-amber-500/60 shadow-[0_4px_25px_rgba(178,127,76,0.25)] select-none bg-[#FFFDF6]/95 backdrop-blur-md text-[#7A4215] flex flex-col items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 cursor-pointer relative overflow-hidden ${
+              isPlaying ? 'ring-2 ring-amber-500/60 shadow-[0_0_25px_rgba(212,163,115,0.5)]' : ''
             }`}
             title={isPlaying ? 'Pause Music' : 'Play Music'}
           >
             {isPlaying ? (
               <Music
                 size={22}
-                className="text-amber-300 animate-[bounce_1.5s_infinite] drop-shadow-[0_0_8px_rgba(251,191,36,0.8)] mt-0.5"
+                className="text-[#9E5D24] animate-[bounce_1.5s_infinite] drop-shadow-[0_1px_2px_rgba(0,0,0,0.1)] mt-0.5"
               />
             ) : (
-              <VolumeX size={20} className="text-amber-200/50 mt-0.5" />
+              <VolumeX size={20} className="text-[#9E5D24]/60 mt-0.5" />
             )}
 
             {/* Equalizer Bars */}
