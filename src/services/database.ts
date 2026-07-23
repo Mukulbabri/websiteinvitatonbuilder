@@ -22,26 +22,31 @@ export const getSiteUrls = (site: any) => {
   const sub = site?.subdomain || 'wedding';
   const dom = site?.domain;
   const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173';
-  const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : ':5173';
-  const protocol = typeof window !== 'undefined' ? window.location.protocol : 'http:';
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+  const port = typeof window !== 'undefined' && window.location.port ? `:${window.location.port}` : '';
+  const protocol = typeof window !== 'undefined' ? window.location.protocol : 'https:';
 
-  // Free Subdomain URL: e.g. http://couplename.localhost:5173 or query fallback http://localhost:5173/?subdomain=couplename
-  const freeSubdomainUrl = `${protocol}//${sub}.localhost${port}`;
-  const localQuerySubdomainUrl = `${origin}/?subdomain=${sub}`;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
 
-  // Custom Domain URL: e.g. http://rahulwedsneha.com or query fallback http://localhost:5173/?domain=rahulwedsneha.com
+  let freeSubdomainUrl: string;
+  if (isLocalhost) {
+    freeSubdomainUrl = `${protocol}//${sub}.localhost${port || ':5173'}`;
+  } else {
+    // Vercel Live Deployment: e.g. https://websiteinvitatonbuilder.vercel.app/?subdomain=rahul
+    freeSubdomainUrl = `${origin}/?subdomain=${encodeURIComponent(sub)}`;
+  }
+
   const hasCustomDomain = dom && !dom.includes('rahulwedsneha.com') && dom !== `${sub}.wedding.com`;
   const customDomainUrl = hasCustomDomain ? (dom.startsWith('http') ? dom : `https://${dom}`) : null;
-  const localQueryCustomDomainUrl = hasCustomDomain ? `${origin}/?domain=${encodeURIComponent(dom)}` : null;
 
   return {
     freeSubdomainUrl,
-    localQuerySubdomainUrl,
+    localQuerySubdomainUrl: freeSubdomainUrl,
     customDomainUrl,
-    localQueryCustomDomainUrl,
+    localQueryCustomDomainUrl: customDomainUrl,
     hasCustomDomain,
     primaryUrl: customDomainUrl || freeSubdomainUrl,
-    primaryTestUrl: localQueryCustomDomainUrl || localQuerySubdomainUrl
+    primaryTestUrl: customDomainUrl || freeSubdomainUrl
   };
 };
 
@@ -51,9 +56,23 @@ export const detectCurrentTenant = async (): Promise<any> => {
   const urlParams = new URLSearchParams(window.location.search);
   const siteParam = urlParams.get('site') || urlParams.get('siteId') || urlParams.get('tenant');
   const domainParam = urlParams.get('domain') || urlParams.get('host');
+  const subParam = urlParams.get('subdomain') || urlParams.get('sub');
   const forceSaas = urlParams.get('saas') === 'true' || urlParams.get('landing') === 'true';
 
-  // 1. Explicit domain / host parameter in URL
+  // 1. Explicit subdomain query parameter in URL (e.g. ?subdomain=rahul)
+  if (subParam) {
+    const mockWebsites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
+    const site = mockWebsites.find((w: any) => (w.subdomain || '').toLowerCase() === subParam.toLowerCase());
+    if (site) {
+      setActiveSite(site);
+      return site;
+    }
+    const defaultSite = { id: `site-${subParam}`, subdomain: subParam, status: 'active' };
+    setActiveSite(defaultSite);
+    return defaultSite;
+  }
+
+  // 2. Explicit domain / host parameter in URL
   if (domainParam) {
     const mockWebsites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
     const site = mockWebsites.find((w: any) => 
@@ -66,7 +85,7 @@ export const detectCurrentTenant = async (): Promise<any> => {
     }
   }
 
-  // 2. Explicit site requested via query parameter
+  // 3. Explicit site requested via query parameter
   if (siteParam) {
     const mockWebsites = JSON.parse(localStorage.getItem('saas_websites') || '[]');
     const site = mockWebsites.find((w: any) => w.id === siteParam || w.subdomain === siteParam);
@@ -79,13 +98,13 @@ export const detectCurrentTenant = async (): Promise<any> => {
     return defaultSite;
   }
 
-  // 3. Explicit SaaS Landing requested
+  // 4. Explicit SaaS Landing requested
   if (forceSaas) {
     setActiveSite(null);
     return null;
   }
 
-  // 4. Subdomain / Custom Domain check against window.location.hostname
+  // 5. Subdomain / Custom Domain check against window.location.hostname
   let subdomain: string | null = null;
   let customDomain: string | null = null;
   const parts = host.split('.');
@@ -93,7 +112,7 @@ export const detectCurrentTenant = async (): Promise<any> => {
     subdomain = parts[0];
   } else if (parts.length === 2 && parts[1] === 'localhost') {
     subdomain = parts[0];
-  } else if (host !== 'localhost' && host !== '127.0.0.1' && !host.endsWith('myplatform.com')) {
+  } else if (host !== 'localhost' && host !== '127.0.0.1' && !host.endsWith('vercel.app') && !host.endsWith('myplatform.com')) {
     customDomain = host;
   }
 

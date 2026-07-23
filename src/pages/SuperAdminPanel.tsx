@@ -506,10 +506,15 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ onBackToGuest 
                               {/* Free Subdomain URL */}
                               <div>
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-[#7A4215] flex items-center gap-1.5">
-                                  <span>Free Subdomain:</span>
-                                  <span className="font-mono font-bold text-[#5C2C06] bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                    {site.subdomain || 'wedding'}.localhost:5173
-                                  </span>
+                                  <span>Subdomain Route:</span>
+                                  <a
+                                    href={siteUrls.freeSubdomainUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-mono font-bold text-[#B27F4C] hover:underline bg-amber-50 px-2 py-0.5 rounded border border-amber-200"
+                                  >
+                                    {siteUrls.freeSubdomainUrl}
+                                  </a>
                                 </div>
                               </div>
 
@@ -564,9 +569,9 @@ export const SuperAdminPanel: React.FC<SuperAdminPanelProps> = ({ onBackToGuest 
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-lg hover:bg-emerald-100 transition flex items-center gap-1 shadow-xs font-mono"
-                                  title={`Open ${site.subdomain || 'wedding'}.localhost:5173`}
+                                  title={`Open ${siteUrls.freeSubdomainUrl}`}
                                 >
-                                  <ExternalLink size={11} /> {site.subdomain || 'wedding'}.localhost:5173
+                                  <ExternalLink size={11} /> Open Site
                                 </a>
 
                                 <button
