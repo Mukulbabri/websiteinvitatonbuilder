@@ -32,8 +32,13 @@ export const getSiteUrls = (site: any) => {
   if (isLocalhost) {
     freeSubdomainUrl = `${protocol}//${sub}.localhost${port || ':5173'}`;
   } else {
-    // Vercel Live Deployment: e.g. https://websiteinvitatonbuilder.vercel.app/?subdomain=rahul
-    freeSubdomainUrl = `${origin}/?subdomain=${encodeURIComponent(sub)}`;
+    // Dynamic Wildcard Subdomain URL: e.g. https://rahul.websiteinvitatonbuilder.vercel.app
+    const hostParts = hostname.split('.');
+    let baseHost = hostname;
+    if (hostParts.length > 2) {
+      baseHost = hostParts.slice(1).join('.');
+    }
+    freeSubdomainUrl = `${protocol}//${sub}.${baseHost}${port}`;
   }
 
   const hasCustomDomain = dom && !dom.includes('rahulwedsneha.com') && dom !== `${sub}.wedding.com`;
@@ -41,7 +46,7 @@ export const getSiteUrls = (site: any) => {
 
   return {
     freeSubdomainUrl,
-    localQuerySubdomainUrl: freeSubdomainUrl,
+    localQuerySubdomainUrl: `${origin}/?subdomain=${encodeURIComponent(sub)}`,
     customDomainUrl,
     localQueryCustomDomainUrl: customDomainUrl,
     hasCustomDomain,
